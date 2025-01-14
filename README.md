@@ -50,7 +50,7 @@ Follow the steps below to get the project running locally.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-org/atlantify.git
+   git clone https://github.com/hmdmsd/atlantify.git
    cd atlantify
    ```
 
