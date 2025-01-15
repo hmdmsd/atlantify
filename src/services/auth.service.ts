@@ -1,37 +1,10 @@
 import { ApiClient } from "../config/api.config";
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-interface RegisterCredentials {
-  username: string;
-  email: string;
-  password: string;
-}
-
-interface AuthResponse {
-  user: User;
-  token: string;
-}
-
-interface ResetPasswordData {
-  email: string;
-}
-
-interface ChangePasswordData {
-  oldPassword: string;
-  newPassword: string;
-}
+import {
+  User,
+  LoginCredentials,
+  RegisterCredentials,
+  AuthResponse,
+} from "../types/auth.types";
 
 class AuthService {
   private static instance: AuthService;
@@ -51,12 +24,19 @@ class AuthService {
 
   public async login(credentials: LoginCredentials): Promise<User> {
     try {
-      const response = await this.api.post<AuthResponse>(
-        "/auth/login",
-        credentials
-      );
-      this.setToken(response.token);
-      return response.user;
+      const response = await this.api.post<AuthResponse>("/auth/login", {
+        username: credentials.email,
+        password: credentials.password,
+      });
+
+      if (!response.success || !response.token) {
+        throw new Error("Login failed");
+      }
+
+      // Store the actual token string
+      this.setToken(response.token.token);
+
+      return response.token.user;
     } catch (error) {
       throw this.handleError(error);
     }
@@ -68,8 +48,15 @@ class AuthService {
         "/auth/register",
         credentials
       );
-      this.setToken(response.token);
-      return response.user;
+
+      if (!response.success) {
+        throw new Error("Registration failed");
+      }
+
+      return await this.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
     } catch (error) {
       throw this.handleError(error);
     }
@@ -84,52 +71,37 @@ class AuthService {
   }
 
   public async getCurrentUser(): Promise<User | null> {
-    if (!this.getToken()) {
+    const token = this.getToken();
+    if (!token) {
       return null;
     }
 
     try {
-      const user = await this.api.get<User>("/auth/me");
-      return user;
+      const response = await this.api.get<{ success: boolean; user: User }>(
+        "/auth/me"
+      );
+      return response.success ? response.user : null;
     } catch (error) {
       this.removeToken();
       return null;
     }
   }
 
-  public async forgotPassword(data: ResetPasswordData): Promise<void> {
-    try {
-      await this.api.post("/auth/forgot-password", data);
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  public async resetPassword(token: string, password: string): Promise<void> {
-    try {
-      await this.api.post("/auth/reset-password", { token, password });
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
-  public async changePassword(data: ChangePasswordData): Promise<void> {
-    try {
-      await this.api.post("/auth/change-password", data);
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
   public async refreshToken(): Promise<void> {
-    try {
-      const token = this.getToken();
-      if (!token) {
-        throw new Error("No refresh token available");
-      }
+    const token = this.getToken();
+    if (!token) {
+      throw new Error("No refresh token available");
+    }
 
-      const response = await this.api.post<{ token: string }>("/auth/refresh");
-      this.setToken(response.token);
+    try {
+      const response = await this.api.post<AuthResponse>("/auth/refresh", {
+        token,
+      });
+      if (response.success && response.token) {
+        this.setToken(response.token.token);
+      } else {
+        throw new Error("Failed to refresh token");
+      }
     } catch (error) {
       this.removeToken();
       throw this.handleError(error);
@@ -164,11 +136,9 @@ class AuthService {
     if (error instanceof Error) {
       return error;
     }
-
     if (typeof error === "string") {
       return new Error(error);
     }
-
     return new Error("An unknown error occurred");
   }
 }

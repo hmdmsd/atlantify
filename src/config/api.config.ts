@@ -33,6 +33,10 @@ export const apiConfig = {
       list: "/songs",
       details: (id: string) => `/songs/${id}`,
     },
+    profile: {
+      base: "/profile",
+      activities: "/profile/activities",
+    },
   },
   headers: {
     "Content-Type": "application/json",

@@ -17,14 +17,13 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login({
-        username: credentials.email,
-        password: credentials.password,
-      });
+      const success = await login(credentials); // Just pass credentials directly
 
       if (success) {
         navigate("/");
       }
+    } catch (error) {
+      console.error("Login error:", error);
     } finally {
       setIsLoading(false);
     }

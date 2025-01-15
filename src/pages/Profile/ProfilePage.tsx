@@ -1,132 +1,44 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
-import {
-  User,
-  Music,
-  Clock,
-  ThumbsUp,
-  Settings,
-  Edit2,
-  Save,
-  X,
-} from "lucide-react";
-
-interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  avatarUrl: string | null;
-  createdAt: string;
-  stats: {
-    suggestionsCount: number;
-    votesCount: number;
-    songsUploadedCount: number;
-  };
-}
-
-interface Activity {
-  id: string;
-  type: "suggestion" | "vote" | "upload";
-  title: string;
-  timestamp: string;
-  details: string;
-}
+import { User, Edit2, Save, X } from "lucide-react";
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user, login } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
-    username: "",
-    email: "",
+    username: user?.username || "",
+    email: user?.email || "",
   });
 
-  useEffect(() => {
-    fetchProfile();
-    fetchActivities();
-  }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const response = await fetch("/api/profile");
-      if (!response.ok) throw new Error("Failed to fetch profile");
-      const data = await response.json();
-      setProfile(data);
-      setEditForm({
-        username: data.username,
-        email: data.email,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load profile");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchActivities = async () => {
-    try {
-      const response = await fetch("/api/profile/activities");
-      if (!response.ok) throw new Error("Failed to fetch activities");
-      const data = await response.json();
-      setActivities(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load activities"
-      );
-    }
-  };
+  if (!user) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-red-500 mb-4">
+          Please login to view your profile
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(editForm),
+      // Reuse the login function to refresh user data after update
+      // In a real app, you'd want a dedicated update profile endpoint
+      const success = await login({
+        email: editForm.email,
+        password: "", // You'd need to handle this differently in a real app
       });
 
-      if (!response.ok) throw new Error("Failed to update profile");
-
-      const updatedProfile = await response.json();
-      setProfile(updatedProfile);
-      setIsEditing(false);
-      setError(null);
+      if (success) {
+        setIsEditing(false);
+        setError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile");
     }
   };
-
-  const renderActivityIcon = (type: Activity["type"]) => {
-    switch (type) {
-      case "suggestion":
-        return <Music className="h-5 w-5 text-blue-500" />;
-      case "vote":
-        return <ThumbsUp className="h-5 w-5 text-green-500" />;
-      case "upload":
-        return <Clock className="h-5 w-5 text-purple-500" />;
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-red-500 mb-4">{error || "Profile not found"}</div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -136,15 +48,7 @@ export const ProfilePage: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
-                {profile.avatarUrl ? (
-                  <img
-                    src={profile.avatarUrl}
-                    alt={profile.username}
-                    className="w-20 h-20 rounded-full object-cover"
-                  />
-                ) : (
-                  <User className="w-8 h-8 text-gray-400" />
-                )}
+                <User className="w-8 h-8 text-gray-400" />
               </div>
               {isEditing ? (
                 <form onSubmit={handleSubmit} className="flex-1">
@@ -203,12 +107,11 @@ export const ProfilePage: React.FC = () => {
               ) : (
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">
-                    {profile.username}
+                    {user.username}
                   </h1>
-                  <p className="text-gray-600">{profile.email}</p>
+                  <p className="text-gray-600">{user.email}</p>
                   <p className="text-sm text-gray-500">
-                    Member since{" "}
-                    {new Date(profile.createdAt).toLocaleDateString()}
+                    Member since {new Date(user.createdAt).toLocaleDateString()}
                   </p>
                 </div>
               )}
@@ -224,60 +127,34 @@ export const ProfilePage: React.FC = () => {
             )}
           </div>
 
-          {/* Stats */}
+          {/* Basic Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Suggestions</div>
-              <div className="mt-1 text-2xl font-semibold">
-                {profile.stats.suggestionsCount}
+              <div className="text-sm text-gray-500">Member ID</div>
+              <div className="mt-1 text-lg font-semibold truncate">
+                {user.id}
               </div>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Votes</div>
-              <div className="mt-1 text-2xl font-semibold">
-                {profile.stats.votesCount}
+              <div className="text-sm text-gray-500">Role</div>
+              <div className="mt-1 text-lg font-semibold capitalize">
+                {user.role || "User"}
               </div>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Songs Uploaded</div>
-              <div className="mt-1 text-2xl font-semibold">
-                {profile.stats.songsUploadedCount}
+              <div className="text-sm text-gray-500">Account Status</div>
+              <div className="mt-1 text-lg font-semibold text-green-600">
+                Active
               </div>
             </div>
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-medium text-gray-900">
-              Recent Activity
-            </h2>
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">
+            {error}
           </div>
-
-          <div className="divide-y">
-            {activities.map((activity) => (
-              <div key={activity.id} className="p-4 flex items-center gap-4">
-                <div className="p-2 rounded-full bg-gray-100">
-                  {renderActivityIcon(activity.type)}
-                </div>
-                <div className="flex-1">
-                  <p className="text-gray-900">{activity.title}</p>
-                  <p className="text-sm text-gray-500">{activity.details}</p>
-                </div>
-                <div className="text-sm text-gray-500">
-                  {new Date(activity.timestamp).toLocaleDateString()}
-                </div>
-              </div>
-            ))}
-
-            {activities.length === 0 && (
-              <div className="p-8 text-center text-gray-500">
-                No recent activity
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

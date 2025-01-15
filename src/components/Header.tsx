@@ -1,6 +1,7 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Music2, Radio, ListMusic, User } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Music2, Radio, ListMusic, User, LogOut } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
 
 interface NavItem {
   label: string;
@@ -10,6 +11,8 @@ interface NavItem {
 
 export const Header: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const navItems: NavItem[] = [
     {
@@ -28,6 +31,11 @@ export const Header: React.FC = () => {
       icon: <ListMusic className="w-5 h-5" />,
     },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/auth/login");
+  };
 
   return (
     <header className="bg-white border-b">
@@ -66,9 +74,32 @@ export const Header: React.FC = () => {
 
           {/* User Menu */}
           <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <User className="w-5 h-5" />
-            </button>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-600"
+                >
+                  <User className="w-5 h-5" />
+                  <span className="hidden md:inline">{user.username}</span>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-red-600"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="hidden md:inline">Logout</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/auth/login"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-600"
+              >
+                <User className="w-5 h-5" />
+                <span>Login</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
