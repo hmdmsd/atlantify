@@ -56,7 +56,9 @@ class MusicBoxService extends EventEmitter {
   }
 
   private setupWebSocket(): void {
-    const ws = new WebSocket(process.env.VITE_WS_URL || "ws://localhost:3000");
+    const ws = new WebSocket(
+      import.meta.env.VITE_WS_URL || "ws://localhost:4000"
+    );
 
     ws.onmessage = (event) => {
       try {

@@ -171,60 +171,6 @@ class AuthService {
 
     return new Error("An unknown error occurred");
   }
-
-  // Token refresh interceptor setup
-  public setupTokenRefreshInterceptor(): void {
-    this.api.setRequestInterceptor(async (config) => {
-      const token = this.getToken();
-      if (!token) return config;
-
-      try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        const expirationTime = payload.exp * 1000;
-        const currentTime = Date.now();
-        const timeBuffer = 5 * 60 * 1000; // 5 minutes
-
-        if (expirationTime - currentTime < timeBuffer) {
-          await this.refreshToken();
-        }
-      } catch (error) {
-        console.error("Token refresh interceptor error:", error);
-      }
-
-      return {
-        ...config,
-        headers: {
-          ...config.headers,
-          Authorization: `Bearer ${this.getToken()}`,
-        },
-      };
-    });
-  }
-
-  // Response error interceptor for handling 401 responses
-  public setupResponseInterceptor(): void {
-    this.api.setResponseInterceptor(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-
-          try {
-            await this.refreshToken();
-            return this.api.request(originalRequest);
-          } catch (refreshError) {
-            this.removeToken();
-            window.location.href = "/auth/login";
-            return Promise.reject(refreshError);
-          }
-        }
-
-        return Promise.reject(error);
-      }
-    );
-  }
 }
 
 export const authService = AuthService.getInstance();

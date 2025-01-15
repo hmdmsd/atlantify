@@ -1,4 +1,3 @@
-// services/radio.service.ts
 import { ApiClient } from "../config/api.config";
 import { EventEmitter } from "events";
 
@@ -53,7 +52,7 @@ class RadioService extends EventEmitter {
   }
 
   private setupWebSocket(): void {
-    const wsUrl = process.env.VITE_WS_URL || "ws://localhost:3000";
+    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:4000";
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onmessage = (event) => {

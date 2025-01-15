@@ -9,14 +9,15 @@ interface ImportMeta {
 }
 
 export const apiConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000",
-  wsUrl: import.meta.env.VITE_WS_URL || "ws://localhost:3000",
+  baseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api",
+  wsUrl: import.meta.env.VITE_WS_URL || "ws://localhost:4000/api",
   endpoints: {
     auth: {
       login: "/auth/login",
       register: "/auth/register",
       logout: "/auth/logout",
       refresh: "/auth/refresh",
+      me: "/auth/me",
     },
     musicBox: {
       suggestions: "/musicbox/suggestions",
