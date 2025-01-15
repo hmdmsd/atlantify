@@ -6,9 +6,7 @@ const path = require('path');
 const app = express();
 
 // Middleware
-app.use(cors({
-    origin: 'http://localhost:3000' // explicitly allow your frontend origin
-  }));
+app.use(cors());
 app.use(express.json());
 
 // File paths
@@ -17,56 +15,38 @@ const QUEUE_FILE = path.join(DATA_DIR, 'queue.json');
 const SUGGESTIONS_FILE = path.join(DATA_DIR, 'suggestions.json');
 const DATABASE_FILE = path.join(DATA_DIR, 'songs.json');
 
-// Ensure data directory exists
-async function initializeDataDirectory() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    
-    // Initialize files if they don't exist
-    const files = [
-      { path: DATABASE_FILE, defaultContent: ['Bohemian Rhapsody', 'Stairway to Heaven', 'Hotel California'] },
-      { path: QUEUE_FILE, defaultContent: [] },
-      { path: SUGGESTIONS_FILE, defaultContent: [] }
-    ];
-
-    for (const file of files) {
-      try {
-        await fs.access(file.path);
-      } catch {
-        await fs.writeFile(file.path, JSON.stringify(file.defaultContent, null, 2));
-      }
-    }
-  } catch (error) {
-    console.error('Error initializing data directory:', error);
-  }
-}
-
-// Helper function to read JSON file
+// Helper functions
 async function readJsonFile(filePath) {
   try {
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      // If file doesn't exist, create it with empty array
-      await fs.writeFile(filePath, '[]');
-      return [];
-    }
+    console.error(`Error reading ${filePath}:`, error);
     throw error;
   }
 }
 
-// Helper function to write JSON file
 async function writeJsonFile(filePath, data) {
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+  try {
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error(`Error writing ${filePath}:`, error);
+    throw error;
+  }
+}
+
+// Check if song exists in database
+async function songExistsInDatabase(song) {
+  const data = await readJsonFile(DATABASE_FILE);
+  return data.songs.some(s => s.toLowerCase() === song.toLowerCase());
 }
 
 // Search songs in database
 app.get('/api/songs/search', async (req, res) => {
   try {
     const { query } = req.query;
-    const songs = await readJsonFile(DATABASE_FILE);
-    const filtered = songs.filter(song => 
+    const data = await readJsonFile(DATABASE_FILE);
+    const filtered = data.songs.filter(song => 
       song.toLowerCase().includes(query.toLowerCase())
     );
     res.json(filtered);
@@ -79,9 +59,18 @@ app.get('/api/songs/search', async (req, res) => {
 app.post('/api/queue', async (req, res) => {
   try {
     const { song } = req.body;
-    const queue = await readJsonFile(QUEUE_FILE);
-    queue.unshift(song); // Add to the beginning of the queue
-    await writeJsonFile(QUEUE_FILE, queue);
+    
+    // Check if song exists in database
+    const exists = await songExistsInDatabase(song);
+    if (!exists) {
+      return res.status(400).json({ error: 'Song not in database' });
+    }
+
+    // Add to queue
+    const data = await readJsonFile(QUEUE_FILE);
+    data.queue.unshift(song);
+    await writeJsonFile(QUEUE_FILE, data);
+    
     res.json({ message: 'Song added to queue' });
   } catch (error) {
     res.status(500).json({ error: 'Error adding song to queue' });
@@ -92,17 +81,32 @@ app.post('/api/queue', async (req, res) => {
 app.post('/api/suggestions', async (req, res) => {
   try {
     const { song } = req.body;
-    const suggestions = await readJsonFile(SUGGESTIONS_FILE);
-    suggestions.push(song);
-    await writeJsonFile(SUGGESTIONS_FILE, suggestions);
+    
+    // Check if song already exists in database
+    const existsInDb = await songExistsInDatabase(song);
+    if (existsInDb) {
+      return res.status(400).json({ error: 'Song already exists in database' });
+    }
+
+    // Check if song already exists in suggestions
+    const suggestionsData = await readJsonFile(SUGGESTIONS_FILE);
+    const existsInSuggestions = suggestionsData.suggestions.some(
+      s => s.toLowerCase() === song.toLowerCase()
+    );
+    
+    if (existsInSuggestions) {
+      return res.status(400).json({ error: 'Song already suggested' });
+    }
+
+    // Add to suggestions
+    suggestionsData.suggestions.push(song);
+    await writeJsonFile(SUGGESTIONS_FILE, suggestionsData);
+    
     res.json({ message: 'Song suggestion added' });
   } catch (error) {
     res.status(500).json({ error: 'Error adding song suggestion' });
   }
 });
-
-// Initialize data directory when server starts
-initializeDataDirectory();
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

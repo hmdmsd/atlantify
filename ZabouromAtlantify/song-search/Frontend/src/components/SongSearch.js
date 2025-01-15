@@ -4,14 +4,26 @@ const SongSearch = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (searchTerm.length > 0) {
-      // Fetch suggestions from backend
+      // Only search when there's text input
       fetch(`http://localhost:3001/api/songs/search?query=${searchTerm}`)
         .then(res => res.json())
-        .then(data => setSuggestions(data))
-        .catch(err => console.error('Error fetching suggestions:', err));
+        .then(data => {
+          // Filter songs that start with the search term
+          const filteredSongs = data.filter(song => 
+            song.toLowerCase().startsWith(searchTerm.toLowerCase())
+          );
+          setSuggestions(filteredSongs);
+          setError('');
+        })
+        .catch(err => {
+          console.error('Error fetching suggestions:', err);
+          setError('Failed to fetch suggestions');
+          setSuggestions([]);
+        });
     } else {
       setSuggestions([]);
     }
@@ -22,39 +34,47 @@ const SongSearch = () => {
     setSuggestions([]);
   };
 
-  const handleAddToQueue = async () => {
+  const handleAction = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/queue', {
+      // Try to add to queue first (if song exists in database)
+      const queueResponse = await fetch('http://localhost:3001/api/queue', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ song: searchTerm }),
       });
-      const data = await response.json();
-      setMessage(data.message);
-      setSearchTerm('');
-    } catch (error) {
-      console.error('Error adding song to queue:', error);
-      setMessage('Error adding song to queue');
-    }
-  };
 
-  const handleSuggest = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/api/suggestions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ song: searchTerm }),
-      });
-      const data = await response.json();
-      setMessage(data.message);
+      const queueData = await queueResponse.json();
+      
+      if (queueResponse.ok) {
+        // Song was in database and added to queue
+        setMessage('Song added to queue');
+      } else if (queueData.error === 'Song not in database') {
+        // Song wasn't in database, add to suggestions
+        const suggestResponse = await fetch('http://localhost:3001/api/suggestions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ song: searchTerm }),
+        });
+        
+        const suggestData = await suggestResponse.json();
+        if (suggestResponse.ok) {
+          setMessage(suggestData.message);
+        } else {
+          setError(suggestData.error);
+        }
+      } else {
+        setError(queueData.error);
+      }
+      
       setSearchTerm('');
+      setSuggestions([]);
     } catch (error) {
-      console.error('Error suggesting song:', error);
-      setMessage('Error suggesting song');
+      console.error('Error:', error);
+      setError('Failed to process request');
     }
   };
 
@@ -70,7 +90,7 @@ const SongSearch = () => {
         />
         
         {suggestions.length > 0 && (
-          <div className="absolute w-full mt-1 bg-white border rounded shadow-lg">
+          <div className="absolute w-full mt-1 bg-white border rounded shadow-lg z-10">
             {suggestions.map((song, index) => (
               <div
                 key={index}
@@ -85,24 +105,21 @@ const SongSearch = () => {
       </div>
 
       <div className="mt-4 flex gap-2 justify-end">
-        {suggestions.length > 0 ? (
+        {searchTerm && (
           <button
-            onClick={handleAddToQueue}
+            onClick={handleAction}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            Add to Queue
+            {suggestions.includes(searchTerm) ? 'Add to Queue' : 'Suggest Song'}
           </button>
-        ) : (
-          searchTerm && (
-            <button
-              onClick={handleSuggest}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-            >
-              Suggest Song
-            </button>
-          )
         )}
       </div>
+
+      {error && (
+        <div className="mt-4 text-center text-red-600">
+          {error}
+        </div>
+      )}
 
       {message && (
         <div className="mt-4 text-center text-green-600">
