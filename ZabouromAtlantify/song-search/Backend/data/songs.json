@@ -1,0 +1,74 @@
+{
+    "songs": [
+        {
+            "id": "song_1",
+            "title": "Shape of You",
+            "artist": "Ed Sheeran",
+            "duration": 233,
+            "addedAt": "2025-01-14T12:00:00Z"
+        },
+        {
+            "id": "song_2",
+            "title": "Blinding Lights",
+            "artist": "The Weeknd",
+            "duration": 200,
+            "addedAt": "2025-01-14T12:10:00Z"
+        },
+        {
+            "id": "song_3",
+            "title": "Levitating",
+            "artist": "Dua Lipa",
+            "duration": 203,
+            "addedAt": "2025-01-14T12:20:00Z"
+        },
+        {
+            "id": "song_4",
+            "title": "Stay",
+            "artist": "The Kid LAROI, Justin Bieber",
+            "duration": 141,
+            "addedAt": "2025-01-14T12:30:00Z"
+        },
+        {
+            "id": "song_5",
+            "title": "As It Was",
+            "artist": "Harry Styles",
+            "duration": 167,
+            "addedAt": "2025-01-14T12:40:00Z"
+        },
+        {
+            "id": "song_6",
+            "title": "Industry Baby",
+            "artist": "Lil Nas X, Jack Harlow",
+            "duration": 212,
+            "addedAt": "2025-01-14T12:50:00Z"
+        },
+        {
+            "id": "song_7",
+            "title": "Peaches",
+            "artist": "Justin Bieber, Daniel Caesar, Giveon",
+            "duration": 198,
+            "addedAt": "2025-01-14T13:00:00Z"
+        },
+        {
+            "id": "song_8",
+            "title": "Good 4 U",
+            "artist": "Olivia Rodrigo",
+            "duration": 178,
+            "addedAt": "2025-01-14T13:10:00Z"
+        },
+        {
+            "id": "song_9",
+            "title": "Drivers License",
+            "artist": "Olivia Rodrigo",
+            "duration": 242,
+            "addedAt": "2025-01-14T13:20:00Z"
+        },
+        {
+            "id": "song_10",
+            "title": "Watermelon Sugar",
+            "artist": "Harry Styles",
+            "duration": 174,
+            "addedAt": "2025-01-14T13:30:00Z"
+        }
+    ]
+}
