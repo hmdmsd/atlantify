@@ -1,5 +1,3 @@
-import { ApiClient } from "../config/api.config";
-
 export interface ApiError {
   message: string;
   code?: string;

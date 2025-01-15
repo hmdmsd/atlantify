@@ -11,19 +11,28 @@ interface Track {
 }
 
 interface AudioPlayerProps {
-  currentTrack: Track | null;
+  currentTrack: Track | null; // Allow null
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  onSeek: (time: number) => void;
+  onPlayPause: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  onMetadataLoaded?: (audio: any) => void;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   currentTrack,
+  isPlaying,
+  currentTime,
+  duration,
+  onSeek,
+  onPlayPause,
   onNext,
   onPrevious,
+  onMetadataLoaded,
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
@@ -37,15 +46,30 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audioRef.current.play();
       }
     }
-  }, [currentTrack]);
+  }, [currentTrack, isPlaying]);
 
   useEffect(() => {
     const audio = audioRef.current;
 
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleLoadedMetadata = () => {
+      if (onMetadataLoaded) {
+        onMetadataLoaded(audio.duration); // Pass the duration
+      }
+    };
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    };
+  }, [onMetadataLoaded]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    const handleTimeUpdate = () => onSeek(audio.currentTime);
+    const handleLoadedMetadata = () => onSeek(audio.duration);
     const handleEnded = () => {
-      setIsPlaying(false);
       if (onNext) onNext();
     };
 
@@ -58,7 +82,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, [onNext]);
+  }, [onNext, onSeek]);
 
   const togglePlay = () => {
     if (isPlaying) {
@@ -66,12 +90,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } else {
       audioRef.current.play();
     }
-    setIsPlaying(!isPlaying);
+    onPlayPause();
   };
 
   const handleSeek = (value: number) => {
     audioRef.current.currentTime = value;
-    setCurrentTime(value);
+    onSeek(value);
   };
 
   const handleVolumeChange = (value: number) => {

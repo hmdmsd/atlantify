@@ -15,14 +15,22 @@ interface Suggestion {
   createdAt: string;
 }
 
+interface SuggestionFilters {
+  status?: "pending" | "approved" | "rejected";
+  sort?: "newest" | "popular";
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
 interface MusicBoxState {
   suggestions: Suggestion[];
   totalSuggestions: number;
   isLoading: boolean;
   error: string | null;
   filters: {
-    status: string;
-    sort: string;
+    status: "pending" | "approved" | "rejected" | "all";
+    sort: "newest" | "popular";
     search: string;
   };
 }
@@ -41,13 +49,7 @@ const initialState: MusicBoxState = {
 
 export const fetchSuggestions = createAsyncThunk(
   "musicBox/fetchSuggestions",
-  async (filters: {
-    status?: string;
-    sort?: string;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }) => {
+  async (filters: SuggestionFilters) => {
     const response = await musicBoxService.getSuggestions(filters);
     return response;
   }

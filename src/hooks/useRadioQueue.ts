@@ -1,127 +1,114 @@
-import { useState, useEffect } from "react";
+// src/hooks/useRadioQueue.ts
+import { useState, useEffect, useCallback } from "react";
 import { ApiClient, apiConfig } from "../config/api.config";
+import { useWebSocket } from "./useWebSocket";
 
 interface Track {
   id: string;
   title: string;
   artist: string;
   url: string;
-  addedBy: string;
+  duration: number;
+  addedBy: {
+    id: string;
+    username: string;
+  };
   addedAt: string;
 }
 
 interface QueueState {
   currentTrack: Track | null;
   queue: Track[];
-  isLoading: boolean;
-  error: string | null;
+  listeners: number;
 }
 
+const api = ApiClient.getInstance();
+
 export const useRadioQueue = () => {
-  const [state, setState] = useState<QueueState>({
-    currentTrack: null,
-    queue: [],
-    isLoading: true,
-    error: null,
-  });
+  const [queue, setQueue] = useState<Track[]>([]);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const [listeners, setListeners] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const { lastMessage, isConnected } = useWebSocket();
 
-  const api = ApiClient.getInstance();
-
-  useEffect(() => {
-    fetchQueue();
-    setupWebSocket();
+  // Fetch initial queue data
+  const fetchQueueData = useCallback(async () => {
+    try {
+      const response = await api.get<QueueState>(
+        apiConfig.endpoints.radio.queue
+      );
+      setQueue(response.queue);
+      setCurrentTrack(response.currentTrack);
+      setListeners(response.listeners);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load queue");
+      console.error(err);
+    }
   }, []);
 
-  const fetchQueue = async () => {
-    try {
-      setState((prev) => ({ ...prev, isLoading: true }));
-      const data = await api.get<{
-        currentTrack: Track | null;
-        queue: Track[];
-      }>(apiConfig.endpoints.radio.queue);
-
-      setState((prev) => ({
-        ...prev,
-        currentTrack: data.currentTrack,
-        queue: data.queue,
-        isLoading: false,
-      }));
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        error: "Failed to fetch queue",
-        isLoading: false,
-      }));
-    }
-  };
-
-  const setupWebSocket = () => {
-    const ws = new WebSocket(apiConfig.wsUrl);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      switch (data.type) {
+  // Handle WebSocket updates
+  useEffect(() => {
+    if (lastMessage) {
+      switch (lastMessage.type) {
         case "QUEUE_UPDATE":
-          setState((prev) => ({
-            ...prev,
-            queue: data.queue,
-          }));
+          setQueue(lastMessage.data.queue);
           break;
-
         case "TRACK_CHANGE":
-          setState((prev) => ({
-            ...prev,
-            currentTrack: data.currentTrack,
-          }));
+          setCurrentTrack(lastMessage.data.currentTrack);
+          break;
+        case "LISTENERS_UPDATE":
+          setListeners(lastMessage.data.listeners);
           break;
       }
-    };
-
-    ws.onerror = () => {
-      setState((prev) => ({
-        ...prev,
-        error: "WebSocket connection failed",
-      }));
-    };
-
-    return () => {
-      ws.close();
-    };
-  };
-
-  const addToQueue = async (trackId: string) => {
-    try {
-      await api.post(apiConfig.endpoints.radio.queue, { trackId });
-      await fetchQueue();
-      return true;
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        error: "Failed to add track to queue",
-      }));
-      return false;
     }
-  };
+  }, [lastMessage]);
 
-  const skipTrack = async () => {
+  // Initial data fetch
+  useEffect(() => {
+    fetchQueueData();
+  }, [fetchQueueData]);
+
+  // Queue management methods
+  const addToQueue = useCallback(async (songId: string) => {
     try {
-      await api.post(apiConfig.endpoints.radio.next);
-      await fetchQueue();
-      return true;
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        error: "Failed to skip track",
-      }));
-      return false;
+      await api.post(apiConfig.endpoints.radio.addToQueue, { songId });
+      setError(null);
+    } catch (err) {
+      setError("Failed to add track to queue");
+      throw err;
     }
-  };
+  }, []);
+
+  const removeFromQueue = useCallback(async (queueId: string) => {
+    try {
+      await api.delete(`${apiConfig.endpoints.radio.removeFromQueue(queueId)}`);
+      setError(null);
+    } catch (err) {
+      setError("Failed to remove track from queue");
+      throw err;
+    }
+  }, []);
+
+  const skipTrack = useCallback(async () => {
+    try {
+      await api.post(apiConfig.endpoints.radio.skip);
+      setError(null);
+    } catch (err) {
+      setError("Failed to skip track");
+      throw err;
+    }
+  }, []);
 
   return {
-    ...state,
+    queue,
+    currentTrack,
+    listeners,
+    error,
+    isConnected,
     addToQueue,
+    removeFromQueue,
     skipTrack,
-    refreshQueue: fetchQueue,
+    refetch: fetchQueueData,
   };
 };

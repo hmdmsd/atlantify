@@ -69,7 +69,7 @@ class AudioService extends EventEmitter {
 
     // Handle audio errors
     this.audio.addEventListener("error", () => {
-      const error = this.audio.error;
+      const error: any = this.audio.error;
       this.emit("error", {
         code: error?.code,
         message: this.getAudioErrorMessage(error?.code),

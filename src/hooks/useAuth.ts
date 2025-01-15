@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { authService } from "../services/auth.service";
 import {
-  User,
   LoginCredentials,
   RegisterCredentials,
   AuthState,

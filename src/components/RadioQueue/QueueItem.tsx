@@ -1,12 +1,15 @@
 import React from "react";
-import { Music, Clock, User } from "lucide-react";
+import { Clock, User } from "lucide-react";
 
 interface Track {
   id: string;
   title: string;
   artist: string;
   duration: number;
-  addedBy: string;
+  addedBy: {
+    id: string;
+    username: string;
+  };
   addedAt: string;
 }
 
@@ -64,7 +67,7 @@ export const QueueItem: React.FC<QueueItemProps> = ({
             </div>
             <div className="flex items-center gap-1">
               <User className="w-4 h-4" />
-              <span>{track.addedBy}</span>
+              <span>{track.addedBy.username}</span>
             </div>
             <div>Added at {formatTime(track.addedAt)}</div>
           </div>

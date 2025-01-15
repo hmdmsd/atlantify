@@ -1,5 +1,4 @@
-// App.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppRoutes } from "./routes";
 import { Header } from "./components/Header";
@@ -18,13 +17,14 @@ const App: React.FC = () => {
     (state: RootState) => state.radio
   );
 
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0); // Keep duration
+
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Check authentication status
         await dispatch(checkAuth()).unwrap();
-
-        // If authenticated, fetch initial queue
         if (isAuthenticated) {
           await dispatch(fetchQueue()).unwrap();
         }
@@ -39,27 +39,20 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Initialize services and set up event listeners
     const initializeServices = async () => {
       try {
-        // Audio service events
         audioService.onError((error) => {
           console.error("Audio error:", error);
-          // You could dispatch to a notification system here
         });
 
-        // Radio service events
-        radioService.on("queueUpdate", (newQueue) => {
+        radioService.on("queueUpdate", () => {
           dispatch(fetchQueue());
         });
 
-        // MusicBox service events
         musicBoxService.on("connectionError", (error: string) => {
           console.error("MusicBox connection error:", error);
-          // Handle connection errors
         });
 
-        // Initial data fetching
         await dispatch(fetchQueue()).unwrap();
       } catch (error) {
         console.error("Service initialization error:", error);
@@ -68,7 +61,6 @@ const App: React.FC = () => {
 
     initializeServices();
 
-    // Cleanup function
     return () => {
       audioService.destroy();
       radioService.removeAllListeners();
@@ -85,30 +77,50 @@ const App: React.FC = () => {
   };
 
   const handlePreviousTrack = () => {
-    // Implement previous track logic if needed
     console.log("Previous track not implemented");
+  };
+
+  const handleSeek = (time: number) => {
+    setCurrentTime(time);
+  };
+
+  const togglePlayPause = () => {
+    setIsPlaying((prev) => !prev);
+  };
+
+  const handleMetadataLoaded = (duration: number) => {
+    setDuration(duration); // Set the duration when metadata is loaded
+  };
+
+  const fallbackTrack = {
+    id: "fallback",
+    title: "No track selected",
+    artist: "Unknown artist",
+    url: "",
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
       {isAuthenticated && <Header />}
 
-      {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-6">
         <AppRoutes />
       </main>
 
-      {/* Audio Player */}
       {isAuthenticated && (
         <AudioPlayer
-          currentTrack={currentTrack}
+          currentTrack={currentTrack || fallbackTrack}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={handleSeek}
+          onPlayPause={togglePlayPause}
           onNext={queue.length > 0 ? handleNextTrack : undefined}
           onPrevious={handlePreviousTrack}
+          onMetadataLoaded={handleMetadataLoaded} // Pass the new prop
         />
       )}
 
-      {/* Toast Container for notifications */}
       <div id="toast-container" className="fixed top-4 right-4 z-50" />
     </div>
   );
@@ -143,7 +155,6 @@ class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("Application error:", error);
     console.error("Error info:", info);
-    // You could send this to an error reporting service
   }
 
   render() {
@@ -177,7 +188,6 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Export wrapped component
 const AppWithErrorBoundary: React.FC = () => {
   return (
     <ErrorBoundary>

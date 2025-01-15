@@ -1,9 +1,11 @@
 export const s3Config = {
-  bucket: "atlantify.deuxfleurs.fr",
-  region: "eu-west-1",
   endpoint: "https://garage.deuxfleurs.fr",
-  maxFileSize: 5 * 1024 * 1024, // 5MB
-  allowedAudioTypes: ["audio/mpeg", "audio/ogg", "audio/wav"],
+  bucket: "atlantify",
+  accessKeyId: "GKa8bf55babca0f2e4c588c7b6",
+  secretAccessKey:
+    "d3a330bd1dd024c2053292cba525bac007075f2bd1d8a3b8c7fa9036976e6d92",
+  maxFileSize: 10 * 1024 * 1024, // Maximum file size in bytes (10 MB)
+  allowedAudioTypes: ["audio/mp3", "audio/ogg", "audio/wav"],
 };
 
 export interface S3Response {
