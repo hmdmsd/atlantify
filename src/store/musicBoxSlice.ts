@@ -66,7 +66,7 @@ export const createSuggestion = createAsyncThunk(
 export const voteSuggestion = createAsyncThunk(
   "musicBox/voteSuggestion",
   async (suggestionId: string) => {
-    const suggestion = await musicBoxService.voteSuggestion(suggestionId);
+    const suggestion = await musicBoxService.toggleVote(suggestionId);
     return suggestion;
   }
 );
@@ -100,7 +100,7 @@ const musicBoxSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(fetchSuggestions.fulfilled, (state, action) => {
+      .addCase(fetchSuggestions.fulfilled, (state, action: any) => {
         state.isLoading = false;
         state.suggestions = action.payload.items;
         state.totalSuggestions = action.payload.total;
@@ -114,7 +114,7 @@ const musicBoxSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(createSuggestion.fulfilled, (state, action) => {
+      .addCase(createSuggestion.fulfilled, (state, action: any) => {
         state.isLoading = false;
         state.suggestions.unshift(action.payload);
         state.totalSuggestions += 1;
@@ -124,9 +124,9 @@ const musicBoxSlice = createSlice({
         state.error = action.error.message || "Failed to create suggestion";
       })
       // Vote Suggestion
-      .addCase(voteSuggestion.fulfilled, (state, action) => {
+      .addCase(voteSuggestion.fulfilled, (state: any, action: any) => {
         const index = state.suggestions.findIndex(
-          (s) => s.id === action.payload.id
+          (s: any) => s.id === action.payload.id
         );
         if (index !== -1) {
           state.suggestions[index] = action.payload;

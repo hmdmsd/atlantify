@@ -1,17 +1,22 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Play, Pause, SkipForward, SkipBack } from "lucide-react";
-import { ProgressBar } from "./ProgressBar";
-import { VolumeControl } from "./VolumeControl";
+import {
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 interface Track {
   id: string;
   title: string;
   artist: string;
-  url: string;
+  url?: string;
 }
 
 interface AudioPlayerProps {
-  currentTrack: Track | null; // Allow null
+  currentTrack: Track | null;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -19,7 +24,7 @@ interface AudioPlayerProps {
   onPlayPause: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
-  onMetadataLoaded?: (audio: any) => void;
+  onMetadataLoaded?: (duration: number) => void;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -53,7 +58,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     const handleLoadedMetadata = () => {
       if (onMetadataLoaded) {
-        onMetadataLoaded(audio.duration); // Pass the duration
+        onMetadataLoaded(audio.duration);
       }
     };
 
@@ -114,25 +119,37 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
 
+  // Helper function to format time
+  const formatTime = (time: number) => {
+    if (isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  // Render nothing if no track is present
+  if (!currentTrack) return null;
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
-      <div className="max-w-screen-lg mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold truncate">
-              {currentTrack?.title || "No track selected"}
-            </h3>
-            <p className="text-gray-600 truncate">
-              {currentTrack?.artist || "Unknown artist"}
-            </p>
-          </div>
+    <div className="border-t border-neutral-800 bg-neutral-900">
+      <div className="max-w-7xl mx-auto flex items-center space-x-6 p-4">
+        {/* Track Info */}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-white font-semibold truncate">
+            {currentTrack.title}
+          </h3>
+          <p className="text-neutral-400 text-sm truncate">
+            {currentTrack.artist}
+          </p>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-center gap-6">
+        {/* Player Controls */}
+        <div className="flex flex-col items-center space-y-2 flex-grow">
+          {/* Control Buttons */}
+          <div className="flex items-center space-x-4">
             <button
               onClick={onPrevious}
-              className="p-2 hover:bg-gray-100 rounded-full"
+              className="text-neutral-400 hover:text-white transition-colors"
               disabled={!onPrevious}
             >
               <SkipBack className="w-5 h-5" />
@@ -140,7 +157,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
             <button
               onClick={togglePlay}
-              className="p-3 bg-blue-500 hover:bg-blue-600 rounded-full text-white"
+              className="p-2 bg-blue-500 hover:bg-blue-600 rounded-full text-white transition-colors"
               disabled={!currentTrack}
             >
               {isPlaying ? (
@@ -152,26 +169,79 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
             <button
               onClick={onNext}
-              className="p-2 hover:bg-gray-100 rounded-full"
+              className="text-neutral-400 hover:text-white transition-colors"
               disabled={!onNext}
             >
               <SkipForward className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
-            <ProgressBar
-              currentTime={currentTime}
-              duration={duration}
-              onSeek={handleSeek}
-            />
-            <VolumeControl
-              volume={volume}
-              isMuted={isMuted}
-              onVolumeChange={handleVolumeChange}
-              onMuteToggle={handleMuteToggle}
-            />
+          {/* Progress Bar */}
+          <div className="flex items-center space-x-3 w-full">
+            <span className="text-xs text-neutral-500">
+              {formatTime(currentTime)}
+            </span>
+            <div className="flex-grow">
+              <input
+                type="range"
+                min="0"
+                max={duration || 0}
+                value={currentTime}
+                onChange={(e) => handleSeek(Number(e.target.value))}
+                className="w-full h-1 bg-neutral-700 appearance-none cursor-pointer rounded-full
+                  [&::-webkit-slider-thumb]:appearance-none 
+                  [&::-webkit-slider-thumb]:w-4 
+                  [&::-webkit-slider-thumb]:h-4 
+                  [&::-webkit-slider-thumb]:bg-blue-500 
+                  [&::-webkit-slider-thumb]:rounded-full
+                  [&::-webkit-slider-thumb]:cursor-pointer
+                  [&::-moz-range-thumb]:appearance-none 
+                  [&::-moz-range-thumb]:w-4 
+                  [&::-moz-range-thumb]:h-4 
+                  [&::-moz-range-thumb]:bg-blue-500 
+                  [&::-moz-range-thumb]:rounded-full
+                  [&::-moz-range-thumb]:cursor-pointer"
+              />
+            </div>
+            <span className="text-xs text-neutral-500">
+              {formatTime(duration)}
+            </span>
           </div>
+        </div>
+
+        {/* Volume Control */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleMuteToggle}
+            className="text-neutral-400 hover:text-white transition-colors"
+          >
+            {isMuted ? (
+              <VolumeX className="w-5 h-5" />
+            ) : (
+              <Volume2 className="w-5 h-5" />
+            )}
+          </button>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={isMuted ? 0 : volume}
+            onChange={(e) => handleVolumeChange(Number(e.target.value))}
+            className="w-24 h-1 bg-neutral-700 appearance-none cursor-pointer rounded-full
+              [&::-webkit-slider-thumb]:appearance-none 
+              [&::-webkit-slider-thumb]:w-4 
+              [&::-webkit-slider-thumb]:h-4 
+              [&::-webkit-slider-thumb]:bg-blue-500 
+              [&::-webkit-slider-thumb]:rounded-full
+              [&::-webkit-slider-thumb]:cursor-pointer
+              [&::-moz-range-thumb]:appearance-none 
+              [&::-moz-range-thumb]:w-4 
+              [&::-moz-range-thumb]:h-4 
+              [&::-moz-range-thumb]:bg-blue-500 
+              [&::-moz-range-thumb]:rounded-full
+              [&::-moz-range-thumb]:cursor-pointer"
+          />
         </div>
       </div>
     </div>

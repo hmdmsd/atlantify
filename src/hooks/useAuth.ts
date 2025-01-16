@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { authService } from "../services/auth.service";
 import {
   LoginCredentials,
@@ -14,38 +14,56 @@ export const useAuth = () => {
     error: null,
   });
 
-  useEffect(() => {
-    checkAuth();
-
-    const refreshInterval = setInterval(() => {
-      if (state.isAuthenticated) {
-        authService.refreshToken().catch(() => {
-          logout();
-        });
-      }
-    }, 14 * 60 * 1000);
-
-    return () => clearInterval(refreshInterval);
-  }, [state.isAuthenticated]);
-
-  const checkAuth = async () => {
-    try {
-      const user = await authService.getCurrentUser();
-      setState({
-        user,
-        isAuthenticated: !!user,
-        isLoading: false,
-        error: null,
-      });
-    } catch (error) {
+  const checkAuth = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: null,
       });
+      return;
     }
-  };
+
+    try {
+      const user = await authService.getCurrentUser();
+      setState({
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      localStorage.removeItem("auth_token");
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: error instanceof Error ? error.message : "Authentication failed",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      const refreshInterval = setInterval(async () => {
+        try {
+          await authService.refreshToken();
+        } catch (error) {
+          console.error("Token refresh failed:", error);
+          logout();
+        }
+      }, 14 * 60 * 1000); // Refresh token every 14 minutes
+
+      return () => clearInterval(refreshInterval);
+    }
+  }, [state.isAuthenticated]);
 
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     try {
@@ -95,6 +113,7 @@ export const useAuth = () => {
     try {
       await authService.logout();
     } finally {
+      localStorage.removeItem("auth_token");
       setState({
         user: null,
         isAuthenticated: false,
@@ -114,5 +133,6 @@ export const useAuth = () => {
     register,
     logout,
     clearError,
+    checkAuth,
   };
 };

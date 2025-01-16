@@ -1,103 +1,173 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { musicBoxService } from "@/services/musicbox.service";
-import { Music2, ThumbsUp, Send, Loader } from "lucide-react";
+import { Send, Music2, Search, Loader, ChevronDown } from "lucide-react";
 
-interface Suggestion {
-  id: string;
+import { musicBoxService } from "@/services/musicbox.service";
+import { Suggestion, SuggestionFilters } from "@/types/suggestion.types";
+import { useAuth } from "@/hooks/useAuth";
+import { SuggestionItem } from "@/components/MusicBox/SuggestionItem";
+
+interface NewSuggestion {
   title: string;
   artist: string;
-  suggestedBy: {
-    id: string;
-    username: string;
-  };
-  votes: number;
-  hasVoted: boolean;
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
 }
 
 export const MusicBoxPage: React.FC = () => {
+  const { isAuthenticated, user } = useAuth();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [newSuggestion, setNewSuggestion] = useState({ title: "", artist: "" });
+  const [newSuggestion, setNewSuggestion] = useState<NewSuggestion>({
+    title: "",
+    artist: "",
+  });
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<SuggestionFilters>({
+    sort: "popular",
+    page: 1,
+    limit: 10,
+  });
+  const [userVotes, setUserVotes] = useState<Set<string>>(new Set());
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchSuggestions = useCallback(
+    async (resetPage = false) => {
+      try {
+        setIsLoading(true);
+        const pageToFetch = resetPage ? 1 : filters.page;
+        const response = await musicBoxService.getSuggestions({
+          ...filters,
+          page: pageToFetch,
+        });
+
+        const fetchedSuggestions = response.suggestions || [];
+
+        setSuggestions((prev) =>
+          resetPage ? fetchedSuggestions : [...prev, ...fetchedSuggestions]
+        );
+
+        setHasMore(fetchedSuggestions.length === filters.limit);
+
+        if (resetPage) {
+          setFilters((prev) => ({ ...prev, page: 1 }));
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch suggestions"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [filters]
+  );
 
   useEffect(() => {
-    fetchSuggestions();
-  }, []);
-
-  const fetchSuggestions = useCallback(async () => {
-    try {
-      const { items } = await musicBoxService.getSuggestions();
-      setSuggestions(items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    fetchSuggestions(true);
+  }, [fetchSuggestions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      setError("Please log in to suggest songs");
+      return;
+    }
+
     if (!newSuggestion.title || !newSuggestion.artist) return;
 
-    setIsSubmitting(true);
-    setError(null);
-
     try {
-      const suggestion = await musicBoxService.createSuggestion({
-        title: newSuggestion.title,
-        artist: newSuggestion.artist,
-      });
-      setSuggestions((prev) => [suggestion, ...prev]);
-      setNewSuggestion({ title: "", artist: "" });
+      const response = await musicBoxService.createSuggestion(newSuggestion);
+      if (response.success && response.suggestion) {
+        setSuggestions((prev: any) => [response.suggestion, ...prev]);
+        setNewSuggestion({ title: "", artist: "" });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add suggestion");
-    } finally {
-      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (suggestionId: string) => {
+    if (!isAuthenticated) {
+      setError("Please log in to delete suggestions");
+      return;
+    }
+
+    try {
+      const response = await musicBoxService.deleteSuggestion(suggestionId);
+      if (response.success) {
+        setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
+        setUserVotes((prev) => {
+          const newVotes = new Set(prev);
+          newVotes.delete(suggestionId);
+          return newVotes;
+        });
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete suggestion"
+      );
     }
   };
 
   const handleVote = async (suggestionId: string) => {
+    if (!isAuthenticated) {
+      setError("Please log in to vote");
+      return;
+    }
+
     try {
-      const updatedSuggestion = await musicBoxService.voteSuggestion(
-        suggestionId
-      );
-      setSuggestions((prev) =>
-        prev.map((s) => (s.id === suggestionId ? updatedSuggestion : s))
-      );
+      const response = await musicBoxService.toggleVote(suggestionId);
+      if (response.success) {
+        setUserVotes((prev) => {
+          const newVotes = new Set(prev);
+          if (response.hasVoted) {
+            newVotes.add(suggestionId);
+          } else {
+            newVotes.delete(suggestionId);
+          }
+          return newVotes;
+        });
+        fetchSuggestions(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to vote");
     }
   };
 
+  const handleLoadMore = () => {
+    setFilters((prev: any) => ({ ...prev, page: prev.page + 1 }));
+  };
+
+  const handleSearch = (searchTerm: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      search: searchTerm,
+      page: 1,
+    }));
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <Music2 className="h-8 w-8 text-blue-500" />
-              Music Box
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Suggest songs and vote for your favorites to be added to the radio
-              queue.
-            </p>
-          </div>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <Music2 className="h-8 w-8 text-blue-500" />
+            Music Box
+          </h1>
+          <p className="mt-2 text-neutral-400">
+            Suggest songs and vote for your favorites to be added to the radio
+            queue.
+          </p>
         </div>
       </div>
 
       {/* Suggestion Form */}
-      <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-lg mb-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <label
                 htmlFor="title"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-neutral-300"
               >
                 Song Title
               </label>
@@ -111,14 +181,15 @@ export const MusicBoxPage: React.FC = () => {
                     title: e.target.value,
                   }))
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                className="block w-full pl-3 pr-3 py-3 bg-neutral-800 border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
                 placeholder="Enter song title"
+                required
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <label
                 htmlFor="artist"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-neutral-300"
               >
                 Artist
               </label>
@@ -132,89 +203,89 @@ export const MusicBoxPage: React.FC = () => {
                     artist: e.target.value,
                   }))
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                className="block w-full pl-3 pr-3 py-3 bg-neutral-800 border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
                 placeholder="Enter artist name"
+                required
               />
             </div>
           </div>
-          <div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="-ml-1 mr-2 h-4 w-4" />
-                  Suggest Song
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={!isAuthenticated}
+            className="inline-flex items-center px-6 py-3 border border-transparent rounded-full shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all"
+          >
+            <Send className="w-5 h-5 mr-2" />
+            Suggest Song
+          </button>
         </form>
       </div>
 
-      {/* Suggestions List */}
-      {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="animate-spin h-8 w-8 text-blue-500" />
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm border divide-y">
-          {error && (
-            <div className="p-4 bg-red-50 text-red-700 text-sm">{error}</div>
-          )}
+      {/* Search Input */}
+      <div className="relative mb-6">
+        <input
+          type="text"
+          placeholder="Search suggestions..."
+          onChange={(e) => handleSearch(e.target.value)}
+          className="w-full px-4 py-3 pl-10 pr-4 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
+        />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-5 h-5" />
+      </div>
 
-          {suggestions.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No suggestions found. Be the first to suggest a song!
-            </div>
-          ) : (
-            suggestions.map((suggestion) => (
-              <div
-                key={suggestion.id}
-                className="p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {suggestion.title}
-                    </h3>
-                    <p className="text-gray-600">{suggestion.artist}</p>
-                    <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                      <span>
-                        Suggested by {suggestion.suggestedBy.username}
-                      </span>
-                      <span>
-                        {new Date(suggestion.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleVote(suggestion.id)}
-                      disabled={suggestion.hasVoted}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-full ${
-                        suggestion.hasVoted
-                          ? "bg-blue-100 text-blue-500 cursor-not-allowed"
-                          : "bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-500"
-                      }`}
-                    >
-                      <ThumbsUp className="h-4 w-4" />
-                      <span>{suggestion.votes}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+      {/* Error Handling */}
+      {error && (
+        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300 mb-6">
+          {error}
         </div>
       )}
+
+      {/* Suggestions List */}
+      <div className="bg-neutral-900 rounded-xl border border-neutral-800 shadow-lg">
+        {isLoading && suggestions.length === 0 ? (
+          <div className="flex justify-center items-center py-12">
+            <Loader className="animate-spin h-8 w-8 text-blue-500" />
+          </div>
+        ) : suggestions.length === 0 ? (
+          <div className="text-center text-neutral-500 py-8">
+            <p>No suggestions yet. Be the first to suggest a song!</p>
+          </div>
+        ) : (
+          <>
+            <div className="max-h-[calc(100vh-570px)] overflow-y-auto custom-scrollbar">
+              <div className="space-y-4 p-4">
+                {suggestions.map((suggestion) => (
+                  <SuggestionItem
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    onVote={handleVote}
+                    onDelete={handleDelete}
+                    hasVoted={userVotes.has(suggestion.id)}
+                    canDelete={user?.role === "admin"}
+                    currentUserId={user?.id}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="flex justify-center py-4 border-t border-neutral-800">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={isLoading}
+                  className="inline-flex items-center px-6 py-3 border border-transparent rounded-full shadow-sm text-sm font-medium text-white bg-neutral-800 hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all"
+                >
+                  {isLoading ? (
+                    <Loader className="animate-spin h-5 w-5 mr-2" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 mr-2" />
+                  )}
+                  Load More
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

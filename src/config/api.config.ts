@@ -12,6 +12,7 @@ export const apiConfig = {
     musicBox: {
       suggestions: "/musicbox/suggestions",
       vote: (id: string) => `/musicbox/suggestions/${id}/vote`,
+      toggleVote: (id: string) => `/musicbox/suggestions/${id}/toggle-vote`, // Add this line
     },
     radio: {
       queue: "/radio/queue",
@@ -34,7 +35,6 @@ export const apiConfig = {
     "Content-Type": "application/json",
   },
 };
-
 export class ApiClient {
   private static instance: ApiClient;
 
@@ -46,21 +46,55 @@ export class ApiClient {
     }
     return ApiClient.instance;
   }
+
+  private getAuthToken(): string | null {
+    const token = localStorage.getItem("auth_token");
+    console.log("Current auth token:", token); // Debug log
+    return token;
+  }
+
+  private async handleResponse<T>(response: Response): Promise<T> {
+    const contentType = response.headers.get("content-type");
+    const isJson = contentType && contentType.includes("application/json");
+
+    if (!response.ok) {
+      const error = isJson
+        ? await response.json()
+        : { message: response.statusText };
+      console.error("API Error:", error); // Debug log
+      throw new Error(
+        error.message || `Request failed with status ${response.status}`
+      );
+    }
+
+    if (isJson) {
+      return response.json();
+    }
+
+    throw new Error(`Unexpected content type: ${contentType}`);
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
     onProgress?: (progress: number) => void
   ): Promise<T> {
-    const token = localStorage.getItem("auth_token");
+    const token = this.getAuthToken();
     const isFormData = options.body instanceof FormData;
 
     const headers = {
-      ...(!isFormData ? apiConfig.headers : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!isFormData && apiConfig.headers),
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     };
 
-    // If onProgress is provided and it's a POST/PUT with FormData, use XMLHttpRequest
+    console.log("Request details:", {
+      url: `${apiConfig.baseUrl}${endpoint}`,
+      method: options.method || "GET",
+      headers,
+    }); // Debug log
+
+    // Handle FormData uploads with progress
     if (
       onProgress &&
       isFormData &&
@@ -72,56 +106,60 @@ export class ApiClient {
 
         // Set headers
         Object.entries(headers).forEach(([key, value]) => {
-          xhr.setRequestHeader(key, value as string);
+          if (value) xhr.setRequestHeader(key, value as string);
         });
 
-        // Progress tracking
-        xhr.upload.onprogress = (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          onProgress(percentCompleted);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentCompleted = Math.round(
+              (event.loaded * 100) / event.total
+            );
+            onProgress(percentCompleted);
+          }
         };
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              resolve(JSON.parse(xhr.responseText));
-            } catch (error) {
-              reject(new Error("Failed to parse response"));
-            }
-          } else {
-            reject(new Error(`Request failed with status ${xhr.status}`));
+        xhr.onload = async () => {
+          try {
+            const response = new Response(xhr.response, {
+              status: xhr.status,
+              statusText: xhr.statusText,
+              headers: new Headers({
+                "Content-Type":
+                  xhr.getResponseHeader("Content-Type") || "application/json",
+              }),
+            });
+            const data = await this.handleResponse<T>(response);
+            resolve(data);
+          } catch (error) {
+            reject(error);
           }
         };
 
         xhr.onerror = () => reject(new Error("Network error"));
-
-        xhr.send(options.body);
+        xhr.send(options.body as FormData);
       });
     }
 
-    // Fallback to fetch for other cases
-    const response = await fetch(`${apiConfig.baseUrl}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    // Standard fetch for non-FormData requests
+    try {
+      const response = await fetch(`${apiConfig.baseUrl}${endpoint}`, {
+        ...options,
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
+      return this.handleResponse<T>(response);
+    } catch (error) {
+      console.error("Request failed:", error); // Debug log
+      throw error;
     }
-
-    return response.json();
   }
 
-  // Update post method to support progress tracking
   async post<T>(
     endpoint: string,
     data?: unknown,
     onProgress?: (progress: number) => void
   ): Promise<T> {
     const isFormData = data instanceof FormData;
-
     return this.request<T>(
       endpoint,
       {
@@ -149,3 +187,6 @@ export class ApiClient {
     });
   }
 }
+
+// Export a singleton instance
+export const apiClient = ApiClient.getInstance();
