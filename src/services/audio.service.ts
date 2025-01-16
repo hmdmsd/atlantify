@@ -7,6 +7,7 @@ interface AudioTrack {
   artist: string;
   url: string;
   duration?: number;
+  views?: number;
 }
 
 interface AudioState {
@@ -33,6 +34,7 @@ class AudioService extends EventEmitter {
   private currentTrack: AudioTrack | null = null;
   private preloadedTracks: Map<string, HTMLAudioElement> = new Map();
   private playbackRate: number = 1.0;
+  private viewTracking: Map<string, boolean> = new Map();
 
   private constructor() {
     super();
@@ -116,6 +118,8 @@ class AudioService extends EventEmitter {
     try {
       if (track && track.id !== this.currentTrack?.id) {
         await this.loadTrack(track);
+        // Reset view tracking for new track
+        this.viewTracking.clear();
       }
 
       if (this.audioContext?.state === "suspended") {
@@ -123,6 +127,12 @@ class AudioService extends EventEmitter {
       }
 
       await this.audio.play();
+      
+      // Record view if not already recorded for this session
+      if (this.currentTrack && !this.viewTracking.get(this.currentTrack.id)) {
+        await this.recordView(this.currentTrack.id);
+        this.viewTracking.set(this.currentTrack.id, true);
+      }
     } catch (error) {
       this.emit("error", {
         code: "PLAYBACK_ERROR",
@@ -131,6 +141,51 @@ class AudioService extends EventEmitter {
       throw error;
     }
   }
+  private async recordView(trackId: string): Promise<void> {
+    try {
+      const response = await fetch(`/api/tracks/${trackId}/view`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to record view');
+      }
+
+      // Emit view recorded event
+      this.emit('viewRecorded', {
+        trackId,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      this.emit("error", {
+        code: "VIEW_RECORDING_ERROR",
+        message: "Failed to record track view",
+      });
+    }
+  }
+  public async getTrackViews(trackId: string): Promise<number> {
+    try {
+      const response = await fetch(`/api/tracks/${trackId}/views`);
+      if (!response.ok) {
+        throw new Error('Failed to get view count');
+      }
+      const data = await response.json();
+      return data.views;
+    } catch (error) {
+      this.emit("error", {
+        code: "VIEW_FETCH_ERROR",
+        message: "Failed to fetch track views",
+      });
+      return 0;
+    }
+  }
+  public onViewRecorded(callback: (data: { trackId: string; timestamp: Date }) => void): void {
+    this.on('viewRecorded', callback);
+  }
+
 
   public pause(): void {
     this.audio.pause();

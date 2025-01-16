@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
+import { audioService } from '../../services/audio.service';
+
 import {
   Play,
   Pause,
@@ -13,6 +15,7 @@ interface Track {
   title: string;
   artist: string;
   url?: string;
+  views?: number;
 }
 
 interface AudioPlayerProps {
@@ -27,6 +30,7 @@ interface AudioPlayerProps {
   onMetadataLoaded?: (duration: number) => void;
 }
 
+
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   currentTrack,
   isPlaying,
@@ -40,8 +44,33 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 }) => {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [viewCount, setViewCount] = useState<number>(0);
+  const viewRecorded = useRef(false);
 
   const audioRef = useRef<HTMLAudioElement>(new Audio());
+
+  useEffect(() => {
+    // Update view count when track changes
+    if (currentTrack) {
+      audioService.getTrackViews(currentTrack.id)
+        .then(setViewCount)
+        .catch(console.error);
+    }
+
+    // Listen for new views
+    const handleViewRecorded = () => {
+      setViewCount(prev => prev + 1);
+    };
+
+    audioService.onViewRecorded(handleViewRecorded);
+
+    return () => {
+      // Clean up listener
+      audioService.removeListener('viewRecorded', handleViewRecorded);
+    };
+  }, [currentTrack?.id]);
+
+
 
   useEffect(() => {
     if (currentTrack?.url) {
