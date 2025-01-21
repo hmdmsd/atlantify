@@ -170,6 +170,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <p className="text-neutral-400 text-sm truncate">
             {currentTrack.artist}
           </p>
+          <p className="text-neutral-500 text-xs">
+            {viewCount.toLocaleString()} views
+          </p>
         </div>
 
         {/* Player Controls */}
