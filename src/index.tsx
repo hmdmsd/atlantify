@@ -1,10 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
-import { store } from "./store";
+import { SongsProvider } from "./contexts/SongsContext";
+
 import App from "./App";
 import "./styles/index.css";
+import { PlayerProvider } from "./contexts/PlayerContext";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -12,10 +13,12 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <Provider store={store}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </Provider>
+    <BrowserRouter>
+      <PlayerProvider>
+        <SongsProvider>
+          <App />
+        </SongsProvider>
+      </PlayerProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

@@ -10,6 +10,7 @@ import {
   Search,
   Heart,
   Settings,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
@@ -23,6 +24,7 @@ export const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const navItems: NavItem[] = [
     {
@@ -70,102 +72,203 @@ export const Header: React.FC = () => {
     navigate("/auth/login");
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
   return (
-    <div className="fixed left-0 top-0 bottom-0 w-64 bg-black border-r border-neutral-900 hidden lg:flex flex-col shadow-lg">
-      {/* Logo */}
-      <Link
-        to="/"
-        className="p-6 pb-8 flex items-center gap-2 border-b border-neutral-900"
-      >
-        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="white"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 18V5l12-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="18" cy="16" r="3" />
-          </svg>
+    <>
+      {/* Desktop Sidebar */}
+      <div className="fixed left-0 top-0 bottom-0 w-64 bg-black border-r border-neutral-900 hidden lg:flex flex-col shadow-lg">
+        <Link
+          to="/"
+          className="p-6 pb-8 flex items-center gap-2 border-b border-neutral-900"
+        >
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="white"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-white">Atlantify</h1>
+        </Link>
+
+        <nav className="flex-1 px-4 py-6 space-y-2">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`
+                flex items-center gap-4 px-4 py-3 rounded-lg transition-colors
+                ${
+                  location.pathname === item.path
+                    ? "bg-neutral-900 text-blue-500"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-900/50"
+                }
+              `}
+            >
+              {item.icon}
+              <span className="font-medium">{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        <div className="px-4 pb-6 space-y-2 border-t border-neutral-900">
+          {additionalNavItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`
+                flex items-center gap-4 px-4 py-3 rounded-lg transition-colors
+                ${
+                  location.pathname === item.path
+                    ? "bg-neutral-900 text-blue-500"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-900/50"
+                }
+              `}
+            >
+              {item.icon}
+              <span className="font-medium">{item.label}</span>
+            </Link>
+          ))}
         </div>
-        <h1 className="text-2xl font-bold text-white">Atlantify</h1>
-      </Link>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`
-              flex items-center gap-4 px-4 py-3 rounded-lg transition-colors
-              ${
-                location.pathname === item.path
-                  ? "bg-neutral-900 text-blue-500"
-                  : "text-neutral-400 hover:text-white hover:bg-neutral-900/50"
-              }
-            `}
-          >
-            {item.icon}
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-
-      {/* Additional Navigation */}
-      <div className="px-4 pb-6 space-y-2 border-t border-neutral-900">
-        {additionalNavItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`
-              flex items-center gap-4 px-4 py-3 rounded-lg transition-colors
-              ${
-                location.pathname === item.path
-                  ? "bg-neutral-900 text-blue-500"
-                  : "text-neutral-400 hover:text-white hover:bg-neutral-900/50"
-              }
-            `}
-          >
-            {item.icon}
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
+        {user && (
+          <div className="p-4 border-t border-neutral-900">
+            <div className="flex items-center justify-between text-neutral-400">
+              <Link
+                to="/profile"
+                className="flex items-center gap-3 hover:text-white transition-colors"
+              >
+                <div className="w-10 h-10 bg-neutral-700 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6 text-neutral-300" />
+                </div>
+                <div>
+                  <span className="font-medium text-white block">
+                    {user.username}
+                  </span>
+                  <span className="text-sm text-neutral-500">Free Account</span>
+                </div>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-full hover:bg-neutral-900 hover:text-red-400 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* User Profile */}
-      {user && (
-        <div className="p-4 border-t border-neutral-900">
-          <div className="flex items-center justify-between text-neutral-400">
-            <Link
-              to="/profile"
-              className="flex items-center gap-3 hover:text-white transition-colors"
-            >
-              <div className="w-10 h-10 bg-neutral-700 rounded-full flex items-center justify-center">
-                <User className="w-6 h-6 text-neutral-300" />
-              </div>
-              <div>
-                <span className="font-medium text-white block">
-                  {user.username}
-                </span>
-                <span className="text-sm text-neutral-500">Free Account</span>
-              </div>
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-full hover:bg-neutral-900 hover:text-red-400 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-black border-b border-neutral-900">
+        <div className="flex items-center justify-between p-4">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="white"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-white">Atlantify</h1>
+          </Link>
+          <button
+            onClick={toggleMobileMenu}
+            className="p-2 text-neutral-400 hover:text-white"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
         </div>
-      )}
-    </div>
+
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 bg-black lg:hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">Menu</h2>
+                <button
+                  onClick={toggleMobileMenu}
+                  className="p-2 text-neutral-400 hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <nav className="space-y-2">
+                {[...navItems, ...additionalNavItems].map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={toggleMobileMenu}
+                    className={`
+                      flex items-center gap-4 px-4 py-3 rounded-lg transition-colors
+                      ${
+                        location.pathname === item.path
+                          ? "bg-neutral-900 text-blue-500"
+                          : "text-neutral-400 hover:text-white hover:bg-neutral-900/50"
+                      }
+                    `}
+                  >
+                    {item.icon}
+                    <span className="font-medium">{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+              {user && (
+                <div className="mt-6 pt-6 border-t border-neutral-900">
+                  <div className="flex items-center justify-between text-neutral-400">
+                    <Link
+                      to="/profile"
+                      onClick={toggleMobileMenu}
+                      className="flex items-center gap-3 hover:text-white transition-colors"
+                    >
+                      <div className="w-10 h-10 bg-neutral-700 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-neutral-300" />
+                      </div>
+                      <div>
+                        <span className="font-medium text-white block">
+                          {user.username}
+                        </span>
+                        <span className="text-sm text-neutral-500">
+                          Free Account
+                        </span>
+                      </div>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="p-2 rounded-full hover:bg-neutral-900 hover:text-red-400 transition-colors"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 };

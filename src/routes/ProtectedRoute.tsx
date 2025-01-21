@@ -1,64 +1,14 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
+import { useAuth } from "@/hooks/useAuth";
+import { Header } from "@/components/Header";
+import { AudioPlayer } from "@/components/AudioPlayer/AudioPlayer";
+import { usePlayer } from "@/contexts/PlayerContext";
 
-// Hooks
-import { useAuth } from "../hooks/useAuth";
-
-// Components
-import { Header } from "../components/Header";
-import { AudioPlayer } from "../components/AudioPlayer/AudioPlayer";
-
-// Store
-import { RootState, AppDispatch } from "../store";
-import { skipTrack } from "../store/radioSlice";
-
-export const ProtectedRoute: React.FC = () => {
+export const ProtectedLayout = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-  const dispatch = useDispatch<AppDispatch>();
-  const { currentTrack, queue } = useSelector(
-    (state: RootState) => state.radio
-  );
 
-  // Fallback track (memoized to prevent unnecessary rerenders)
-  const fallbackTrack = useMemo(
-    () => ({
-      id: "fallback",
-      title: "No track selected",
-      artist: "Unknown artist",
-      url: "",
-    }),
-    []
-  );
-
-  // State for audio player
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  // Memoized handlers to maintain consistent hook calls
-  const handleNextTrack = useCallback(async () => {
-    try {
-      await dispatch(skipTrack()).unwrap();
-    } catch (error) {
-      console.error("Failed to skip track:", error);
-    }
-  }, [dispatch]);
-
-  const handleSeek = useCallback((time: number) => {
-    setCurrentTime(time);
-  }, []);
-
-  const togglePlayPause = useCallback(() => {
-    setIsPlaying((prev) => !prev);
-  }, []);
-
-  const handleMetadataLoaded = useCallback((trackDuration: number) => {
-    setDuration(trackDuration);
-  }, []);
-
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
@@ -67,40 +17,38 @@ export const ProtectedRoute: React.FC = () => {
     );
   }
 
-  // Authentication check
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
-      {/* Sidebar Navigation */}
-      <Header />
+    <div className="min-h-screen bg-black text-white">
+      <div className="flex h-screen">
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:block w-64 flex-shrink-0 fixed left-0 top-0 h-full">
+          <Header />
+        </aside>
 
-      {/* Main Content Area */}
-      <div className="ml-64 flex-1 flex flex-col overflow-hidden">
-        {/* Main Scrollable Content */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-neutral-900 to-black">
-          <div className="container max-w-7xl mx-auto px-4 py-6">
+        {/* Mobile Header */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-20">
+          <Header />
+        </div>
+
+        {/* Main Content Area */}
+        <main className="flex-1 lg:ml-64 relative overflow-y-auto">
+          {/* Mobile Header Spacer */}
+          <div className="h-16 lg:h-0" />
+
+          {/* Content Container */}
+          <div className="container max-w-7xl mx-auto px-4 py-6 pb-32">
             <Outlet />
           </div>
+
+          {/* Audio Player Container */}
+          <div className="fixed bottom-0 left-0 right-0 lg:left-64">
+            <AudioPlayer />
+          </div>
         </main>
-
-        {/* Audio Player - Fixed at Bottom */}
-
-        <div className="border-t border-neutral-800 bg-neutral-900">
-          <AudioPlayer
-            currentTrack={currentTrack || fallbackTrack}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={handleSeek}
-            onPlayPause={togglePlayPause}
-            onNext={queue.length > 0 ? handleNextTrack : undefined}
-            onPrevious={() => console.log("Previous track not implemented")}
-            onMetadataLoaded={handleMetadataLoaded}
-          />
-        </div>
       </div>
 
       {/* Toast Container */}
@@ -108,3 +56,5 @@ export const ProtectedRoute: React.FC = () => {
     </div>
   );
 };
+
+export default ProtectedLayout;

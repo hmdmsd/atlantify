@@ -12,7 +12,7 @@ export const apiConfig = {
     musicBox: {
       suggestions: "/musicbox/suggestions",
       vote: (id: string) => `/musicbox/suggestions/${id}/vote`,
-      toggleVote: (id: string) => `/musicbox/suggestions/${id}/toggle-vote`, // Add this line
+      toggleVote: (id: string) => `/musicbox/suggestions/${id}/toggle-vote`,
     },
     radio: {
       queue: "/radio/queue",
@@ -25,6 +25,7 @@ export const apiConfig = {
       upload: "/songs/upload",
       list: "/songs",
       details: (id: string) => `/songs/${id}`,
+      stream: (id: string) => `/songs/stream/${id}`, // Add streaming endpoint
     },
     profile: {
       base: "/profile",
@@ -35,6 +36,7 @@ export const apiConfig = {
     "Content-Type": "application/json",
   },
 };
+
 export class ApiClient {
   private static instance: ApiClient;
 
@@ -49,7 +51,6 @@ export class ApiClient {
 
   private getAuthToken(): string | null {
     const token = localStorage.getItem("auth_token");
-    console.log("Current auth token:", token); // Debug log
     return token;
   }
 
@@ -61,7 +62,6 @@ export class ApiClient {
       const error = isJson
         ? await response.json()
         : { message: response.statusText };
-      console.error("API Error:", error); // Debug log
       throw new Error(
         error.message || `Request failed with status ${response.status}`
       );
@@ -71,7 +71,8 @@ export class ApiClient {
       return response.json();
     }
 
-    throw new Error(`Unexpected content type: ${contentType}`);
+    // For non-JSON responses (like audio streams), return the response itself
+    return response as unknown as T;
   }
 
   private async request<T>(
@@ -88,12 +89,6 @@ export class ApiClient {
       ...options.headers,
     };
 
-    console.log("Request details:", {
-      url: `${apiConfig.baseUrl}${endpoint}`,
-      method: options.method || "GET",
-      headers,
-    }); // Debug log
-
     // Handle FormData uploads with progress
     if (
       onProgress &&
@@ -104,7 +99,6 @@ export class ApiClient {
         const xhr = new XMLHttpRequest();
         xhr.open(options.method || "POST", `${apiConfig.baseUrl}${endpoint}`);
 
-        // Set headers
         Object.entries(headers).forEach(([key, value]) => {
           if (value) xhr.setRequestHeader(key, value as string);
         });
@@ -140,18 +134,42 @@ export class ApiClient {
       });
     }
 
-    // Standard fetch for non-FormData requests
     try {
       const response = await fetch(`${apiConfig.baseUrl}${endpoint}`, {
         ...options,
         headers,
+        credentials: "include", // Include credentials for CORS
       });
 
       return this.handleResponse<T>(response);
     } catch (error) {
-      console.error("Request failed:", error); // Debug log
+      console.error("Request failed:", error);
       throw error;
     }
+  }
+
+  // Audio streaming methods
+  async getAudioStream(songId: string): Promise<Response> {
+    const token = this.getAuthToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(
+      `${apiConfig.baseUrl}${apiConfig.endpoints.songs.stream(songId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch audio stream");
+    }
+
+    return response;
   }
 
   async post<T>(
@@ -170,8 +188,8 @@ export class ApiClient {
     );
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint);
+  async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    return this.request<T>(endpoint, options);
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {

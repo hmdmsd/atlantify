@@ -1,17 +1,7 @@
-import React, { useEffect } from "react";
-import { useDispatch } from "react-redux";
+import React from "react";
 
 // Routes
 import { AppRoutes } from "./routes";
-
-// Store
-import { AppDispatch } from "./store";
-import { checkAuth } from "./store/authSlice";
-import { fetchQueue } from "./store/radioSlice";
-
-// Services
-import { audioService } from "./services/audio.service";
-import { radioService } from "./services/radio.service";
 
 // Error Boundary
 interface ErrorBoundaryProps {
@@ -91,39 +81,6 @@ class ErrorBoundary extends React.Component<
 
 // Main App Component
 const App: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
-
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Check authentication status
-        await dispatch(checkAuth()).unwrap();
-
-        // Initialize audio and radio services
-        audioService.onError((error) => {
-          console.error("Audio error:", error);
-        });
-
-        radioService.on("queueUpdate", () => {
-          dispatch(fetchQueue());
-        });
-
-        // Initial queue fetch
-        await dispatch(fetchQueue()).unwrap();
-      } catch (error) {
-        console.error("App initialization error:", error);
-      }
-    };
-
-    initializeApp();
-
-    // Cleanup function
-    return () => {
-      audioService.destroy();
-      radioService.removeAllListeners();
-    };
-  }, [dispatch]);
-
   return (
     <ErrorBoundary>
       <AppRoutes />

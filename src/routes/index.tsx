@@ -1,8 +1,6 @@
 import React from "react";
 import { Routes, Route } from "react-router-dom";
-
-// Route Component
-import { ProtectedRoute } from "./ProtectedRoute";
+import { ProtectedLayout } from "./ProtectedRoute";
 
 // Pages
 import { LoginPage } from "../pages/Auth/LoginPage";
@@ -27,7 +25,7 @@ export const AppRoutes: React.FC = () => {
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
       {/* Protected Routes */}
-      <Route element={<ProtectedRoute />}>
+      <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/music-box" element={<MusicBoxPage />} />
         <Route path="/profile" element={<ProfilePage />} />
@@ -60,3 +58,5 @@ export const AppRoutes: React.FC = () => {
     </Routes>
   );
 };
+
+export default AppRoutes;
