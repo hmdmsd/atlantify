@@ -25,7 +25,9 @@ interface PlayerContextType {
   isLoading: boolean;
   error: string | null;
   queue: Track[];
-  play: (track: Track) => Promise<void>;
+  isRadioMode: boolean;
+  requiresInteraction: boolean;
+  play: (track: Track, radioMode?: boolean) => Promise<void>;
   pause: () => void;
   togglePlay: () => void;
   seek: (time: number) => void;
@@ -36,6 +38,8 @@ interface PlayerContextType {
   addToQueue: (track: Track) => void;
   removeFromQueue: (trackId: string) => void;
   clearQueue: () => void;
+  setRadioMode: (active: boolean) => void;
+  handleUserInteraction: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -52,6 +56,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
+  const [isRadioMode, setIsRadioMode] = useState(false);
+  const [requiresInteraction, setRequiresInteraction] = useState(true);
+  const [pendingTrack, setPendingTrack] = useState<Track | null>(null);
 
   const audioRef = useRef(new Audio());
 
@@ -65,14 +72,21 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
       setIsLoading(false);
-      if (isPlaying) {
-        audio.play().catch(console.error);
+      if (isPlaying && !requiresInteraction) {
+        audio.play().catch((error) => {
+          if (error.name === "NotAllowedError") {
+            setRequiresInteraction(true);
+            setError("Click anywhere to start playback");
+          }
+        });
       }
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
-      next();
+      if (!isRadioMode) {
+        next();
+      }
     };
 
     const handleError = (e: ErrorEvent) => {
@@ -87,15 +101,38 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError as EventListener);
 
+    // Set initial volume
+    audio.volume = volume;
+
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError as EventListener);
     };
-  }, []);
+  }, [isPlaying, isRadioMode, volume, requiresInteraction]);
 
-  const play = async (track?: Track) => {
+  const handleUserInteraction = useCallback(() => {
+    setRequiresInteraction(false);
+    if (pendingTrack) {
+      const track = pendingTrack;
+      setPendingTrack(null);
+      play(track, isRadioMode);
+    }
+  }, [isRadioMode, pendingTrack]);
+
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      if (requiresInteraction) {
+        handleUserInteraction();
+      }
+    };
+
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, [requiresInteraction, handleUserInteraction]);
+
+  const play = async (track?: Track, radioMode: boolean = false) => {
     try {
       setError(null);
       setIsLoading(true);
@@ -105,21 +142,39 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
           throw new Error("No audio URL provided");
         }
 
-        // If a new track is selected, update the audio source
-        if (currentTrack?.id !== track.id) {
+        if (requiresInteraction) {
+          setPendingTrack(track);
+          setError("Click anywhere to start playback");
+          return;
+        }
+
+        setIsRadioMode(radioMode);
+
+        if (currentTrack?.id !== track.id || isRadioMode !== radioMode) {
           audioRef.current.src = track.url;
           setCurrentTrack(track);
           await audioRef.current.load();
         }
       }
 
-      if (audioRef.current.src) {
-        await audioRef.current.play();
-        setIsPlaying(true);
+      try {
+        if (audioRef.current.src) {
+          await audioRef.current.play();
+          setIsPlaying(true);
+          setError(null);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "NotAllowedError") {
+          setRequiresInteraction(true);
+          setPendingTrack(track || currentTrack);
+          setError("Click anywhere to start playback");
+        } else {
+          throw error;
+        }
       }
     } catch (error) {
       console.error("Error playing track:", error);
-      setError("Failed to play audio. Please check the audio source.");
+      setError("Failed to play audio. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -134,32 +189,40 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     if (isPlaying) {
       pause();
     } else if (currentTrack) {
-      play(currentTrack);
+      play(currentTrack, isRadioMode);
     }
-  }, [currentTrack, isPlaying, pause]);
+  }, [currentTrack, isPlaying, isRadioMode, pause]);
 
-  const seek = useCallback((time: number) => {
-    audioRef.current.currentTime = time;
-    setCurrentTime(time);
-  }, []);
+  const seek = useCallback(
+    (time: number) => {
+      if (!isRadioMode) {
+        audioRef.current.currentTime = time;
+        setCurrentTime(time);
+      }
+    },
+    [isRadioMode]
+  );
 
   const next = useCallback(() => {
-    if (queue.length > 0) {
+    if (!isRadioMode && queue.length > 0) {
       const nextTrack = queue[0];
       const newQueue = queue.slice(1);
       setQueue(newQueue);
-      play(nextTrack);
+      play(nextTrack, false);
     }
-  }, [queue]);
+  }, [queue, isRadioMode]);
 
   const previous = useCallback(() => {
-    // Implement previous track logic if needed
-  }, []);
+    if (!isRadioMode) {
+      // Implement previous track logic if needed
+    }
+  }, [isRadioMode]);
 
   const setVolume = useCallback((newVolume: number) => {
-    audioRef.current.volume = newVolume;
-    setVolumeState(newVolume);
-    setIsMuted(newVolume === 0);
+    const safeVolume = Math.max(0, Math.min(1, newVolume));
+    audioRef.current.volume = safeVolume;
+    setVolumeState(safeVolume);
+    setIsMuted(safeVolume === 0);
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -172,17 +235,41 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isMuted, volume]);
 
-  const addToQueue = useCallback((track: Track) => {
-    setQueue((prevQueue) => [...prevQueue, track]);
-  }, []);
+  const addToQueue = useCallback(
+    (track: Track) => {
+      if (!isRadioMode) {
+        setQueue((prevQueue) => [...prevQueue, track]);
+      }
+    },
+    [isRadioMode]
+  );
 
-  const removeFromQueue = useCallback((trackId: string) => {
-    setQueue((prevQueue) => prevQueue.filter((track) => track.id !== trackId));
-  }, []);
+  const removeFromQueue = useCallback(
+    (trackId: string) => {
+      if (!isRadioMode) {
+        setQueue((prevQueue) =>
+          prevQueue.filter((track) => track.id !== trackId)
+        );
+      }
+    },
+    [isRadioMode]
+  );
 
   const clearQueue = useCallback(() => {
-    setQueue([]);
-  }, []);
+    if (!isRadioMode) {
+      setQueue([]);
+    }
+  }, [isRadioMode]);
+
+  const setRadioMode = useCallback(
+    (active: boolean) => {
+      setIsRadioMode(active);
+      if (active) {
+        clearQueue();
+      }
+    },
+    [clearQueue]
+  );
 
   return (
     <PlayerContext.Provider
@@ -196,6 +283,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         isLoading,
         error,
         queue,
+        isRadioMode,
+        requiresInteraction,
         play,
         pause,
         togglePlay,
@@ -207,6 +296,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         addToQueue,
         removeFromQueue,
         clearQueue,
+        setRadioMode,
+        handleUserInteraction,
       }}
     >
       {children}
@@ -221,3 +312,5 @@ export const usePlayer = () => {
   }
   return context;
 };
+
+export default PlayerProvider;

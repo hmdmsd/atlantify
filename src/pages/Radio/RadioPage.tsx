@@ -1,23 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Wifi,
   WifiOff,
   Music2,
   Plus,
   SkipForward,
-  Pause,
-  Play,
   Power,
+  VolumeX,
+  Volume2,
 } from "lucide-react";
 import { useRadioQueue } from "@/hooks/useRadioQueue";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { usePlayer } from "@/contexts/PlayerContext";
 import { SongSearchModal } from "@/components/Modals/SongSearchModal";
 import { QueueItem } from "@/components/RadioQueue/QueueItem";
 
 export const RadioPage: React.FC = () => {
   const {
     queue,
-    currentTrack,
+    currentTrack: radioTrack,
     listeners,
     isConnected,
     isAdmin,
@@ -28,9 +28,76 @@ export const RadioPage: React.FC = () => {
     toggleRadioStatus,
   } = useRadioQueue();
 
-  const { isPlaying, togglePlay } = useAudioPlayer();
+  const {
+    play,
+    pause,
+    currentTrack: playerTrack,
+    isPlaying,
+    requiresInteraction,
+    error,
+    handleUserInteraction,
+    setRadioMode,
+  } = usePlayer();
 
   const [showSongSearchModal, setShowSongSearchModal] = useState(false);
+
+  // Effect to handle radio activation and track changes
+  useEffect(() => {
+    if (isRadioActive && radioTrack) {
+      // Set radio mode first
+      setRadioMode(true);
+
+      // Log track data for debugging
+      console.log("Radio Track Data:", radioTrack);
+
+      // Construct the full audio URL
+      const baseUrl = import.meta.env.VITE_API_URL || "";
+      const audioUrl = (() => {
+        // If it's already a full URL, use it
+        if (
+          radioTrack.url?.startsWith("http") ||
+          radioTrack.path?.startsWith("http")
+        ) {
+          return radioTrack.url || radioTrack.path;
+        }
+
+        // If it starts with slash, append to base URL
+        if (
+          radioTrack.url?.startsWith("/") ||
+          radioTrack.path?.startsWith("/")
+        ) {
+          return `${baseUrl}${radioTrack.url || radioTrack.path}`;
+        }
+
+        // Otherwise, assume it's relative to base URL
+        return `${baseUrl}/${radioTrack.url || radioTrack.path}`;
+      })();
+
+      console.log("Constructed Audio URL:", audioUrl);
+
+      // Format track data with complete URL
+      const trackData = {
+        id: radioTrack.id,
+        title: radioTrack.title,
+        artist: radioTrack.artist,
+        url: audioUrl,
+        duration: radioTrack.duration || 0,
+      };
+
+      // Only attempt to play if we have a valid URL
+      if (trackData.url && trackData.url !== "undefined") {
+        // Play the track immediately
+        play(trackData, true).catch((error) => {
+          console.error("Failed to play track:", error);
+        });
+      } else {
+        console.error("No valid audio URL found for track:", radioTrack);
+      }
+    } else if (!isRadioActive) {
+      setRadioMode(false);
+      pause();
+    }
+  }, [isRadioActive, radioTrack?.id]); // Only depend on track ID and radio state
 
   const handleAddToQueue = async (songId: string) => {
     try {
@@ -49,8 +116,33 @@ export const RadioPage: React.FC = () => {
     }
   };
 
+  const handleContainerClick = () => {
+    if (requiresInteraction) {
+      handleUserInteraction();
+    }
+  };
+
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div
+      className="p-6 space-y-8 max-w-7xl mx-auto"
+      onClick={handleContainerClick}
+    >
+      {/* Autoplay Message */}
+      {requiresInteraction && isRadioActive && radioTrack && (
+        <div className="bg-blue-500/20 text-blue-400 p-4 rounded-lg mb-4 flex items-center justify-center space-x-2">
+          <Music2 className="w-5 h-5" />
+          <span>Click anywhere to start playback</span>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && !requiresInteraction && (
+        <div className="bg-red-500/20 text-red-400 p-4 rounded-lg mb-4 flex items-center justify-center space-x-2">
+          <VolumeX className="w-5 h-5" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Connection and Radio Status */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
@@ -98,21 +190,21 @@ export const RadioPage: React.FC = () => {
       </div>
 
       {/* Current Track Section */}
-      {currentTrack && isRadioActive && (
+      {radioTrack && isRadioActive && (
         <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
-                onClick={togglePlay}
-                className="p-3 bg-blue-500 hover:bg-blue-600 rounded-full text-white transition-colors"
-              >
-                {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-              </button>
+              <div className="flex-shrink-0 w-14 h-14 bg-neutral-800 rounded-lg flex items-center justify-center">
+                <Volume2 className="w-6 h-6 text-neutral-400" />
+              </div>
               <div>
                 <h3 className="font-bold text-lg text-white">
-                  {currentTrack.title}
+                  {radioTrack.title}
                 </h3>
-                <p className="text-neutral-400">{currentTrack.artist}</p>
+                <p className="text-neutral-400">{radioTrack.artist}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                  Live Radio
+                </span>
               </div>
             </div>
             {isAdmin && (
@@ -149,7 +241,7 @@ export const RadioPage: React.FC = () => {
             key={track.id}
             track={track}
             position={index + 1}
-            isCurrentTrack={currentTrack?.id === track.id}
+            isCurrentTrack={radioTrack?.id === track.id}
             onRemove={isAdmin ? () => removeFromQueue(track.id) : undefined}
           />
         ))}
