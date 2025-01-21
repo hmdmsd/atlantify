@@ -22,6 +22,8 @@ export interface SuggestionResponse {
   suggestion?: Suggestion;
   message?: string;
   error?: string;
+  statusCode?: number; 
+  existingSuggestion?: Suggestion; // Added for duplicate suggestion responses
 }
 
 export interface SuggestionsListResponse {

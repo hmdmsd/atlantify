@@ -56,21 +56,26 @@ export class ApiClient {
   private async handleResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get("content-type");
     const isJson = contentType && contentType.includes("application/json");
-
-    if (!response.ok) {
-      const error = isJson
-        ? await response.json()
-        : { message: response.statusText };
-      console.error("API Error:", error); // Debug log
-      throw new Error(
-        error.message || `Request failed with status ${response.status}`
-      );
-    }
-
+  
     if (isJson) {
-      return response.json();
+      const data = await response.json();
+      // Add status code to the response
+      if (typeof data === 'object') {
+        data.statusCode = response.status;
+      }
+  
+      if (!response.ok) {
+        // For 409 Conflict, return the response as is
+        if (response.status === 409) {
+          return data as T;
+        }
+        // For other errors, throw them
+        throw new Error(data.message || `Request failed with status ${response.status}`);
+      }
+  
+      return data as T;
     }
-
+  
     throw new Error(`Unexpected content type: ${contentType}`);
   }
 
