@@ -14,6 +14,7 @@ interface NewSuggestion {
 export const MusicBoxPage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [duplicateSuggestion, setDuplicateSuggestion] = useState<Suggestion | null>(null);
   const [newSuggestion, setNewSuggestion] = useState<NewSuggestion>({
     title: "",
     artist: "",
@@ -46,7 +47,8 @@ export const MusicBoxPage: React.FC = () => {
 
         setHasMore(fetchedSuggestions.length === filters.limit);
 
-        if (resetPage) {
+        // Only update the page if we're not already on page 1
+        if (resetPage && filters.page !== 1) {
           setFilters((prev) => ({ ...prev, page: 1 }));
         }
       } catch (err) {
@@ -57,12 +59,13 @@ export const MusicBoxPage: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [filters]
-  );
+    [filters.page, filters.limit, filters.sort, filters.search] // Only depend on specific filter properties you use
+);
 
-  useEffect(() => {
+// Change the useEffect to run only when specific filters change
+useEffect(() => {
     fetchSuggestions(true);
-  }, [fetchSuggestions]);
+}, [filters.sort, filters.search]); // Only re-fetch when sort or search changes
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,10 +78,28 @@ export const MusicBoxPage: React.FC = () => {
 
     try {
       const response = await musicBoxService.createSuggestion(newSuggestion);
-      if (response.success && response.suggestion) {
-        setSuggestions((prev: any) => [response.suggestion, ...prev]);
-        setNewSuggestion({ title: "", artist: "" });
+      
+      if (!response.success) {
+        if (response.existingSuggestion) {
+          setDuplicateSuggestion(response.existingSuggestion);
+          setError("This song has already been suggested.");
+          // Optionally scroll to the existing suggestion
+          const element = document.getElementById(`suggestion-${response.existingSuggestion.id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+            element.classList.add('highlight-suggestion');
+            setTimeout(() => element.classList.remove('highlight-suggestion'), 2000);
+          }
+        } else {
+          setError(response.message || "Failed to add suggestion");
+        }
+        return;
       }
+
+      setSuggestions((prev: any) => [response.suggestion, ...prev]);
+      setNewSuggestion({ title: "", artist: "" });
+      setDuplicateSuggestion(null);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add suggestion");
     }
@@ -91,7 +112,7 @@ export const MusicBoxPage: React.FC = () => {
     }
 
     try {
-      const response = await musicBoxService.deleteSuggestion(suggestionId);
+      const response = await musicBoxService.removeSuggestion(suggestionId);
       if (response.success) {
         setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
         setUserVotes((prev) => {
@@ -235,6 +256,23 @@ export const MusicBoxPage: React.FC = () => {
       {error && (
         <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300 mb-6">
           {error}
+        </div>
+      )}
+
+      {/* Error Handling with Duplicate Suggestion Info */}
+      {error && (
+        <div className={`rounded-lg p-4 mb-6 ${
+          duplicateSuggestion 
+            ? "bg-yellow-900/20 border border-yellow-500/30 text-yellow-300"
+            : "bg-red-900/20 border border-red-500/30 text-red-300"
+        }`}>
+          <p>{error}</p>
+          {duplicateSuggestion && (
+            <div className="mt-2 text-sm">
+              <p>Original suggestion by User #{duplicateSuggestion.suggestedBy.slice(0, 8)}</p>
+              <p>Suggested on: {new Date(duplicateSuggestion.createdAt).toLocaleDateString()}</p>
+            </div>
+          )}
         </div>
       )}
 

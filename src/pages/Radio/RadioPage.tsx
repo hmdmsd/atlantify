@@ -11,7 +11,6 @@ import {
   Play,
 } from "lucide-react";
 import { QueueItem } from "@/components/RadioQueue/QueueItem";
-import { SongUploadModal } from "@/components/Modals/SongUploadModal";
 
 export const RadioPage: React.FC = () => {
   const {
@@ -136,14 +135,6 @@ export const RadioPage: React.FC = () => {
         <div className="bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-lg">
           {error}
         </div>
-      )}
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <SongUploadModal
-          onClose={() => setShowUploadModal(false)}
-          onAddTrack={handleAddTrack}
-        />
       )}
     </div>
   );

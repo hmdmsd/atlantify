@@ -25,7 +25,7 @@ export const apiConfig = {
       upload: "/songs/upload",
       list: "/songs",
       details: (id: string) => `/songs/${id}`,
-      stream: (id: string) => `/songs/stream/${id}`, // Add streaming endpoint
+      stream: (id: string) => `/songs/stream/${id}`,
     },
     profile: {
       base: "/profile",
@@ -50,25 +50,38 @@ export class ApiClient {
   }
 
   private getAuthToken(): string | null {
-    const token = localStorage.getItem("auth_token");
-    return token;
+    return localStorage.getItem("auth_token");
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get("content-type");
     const isJson = contentType && contentType.includes("application/json");
 
-    if (!response.ok) {
-      const error = isJson
-        ? await response.json()
-        : { message: response.statusText };
-      throw new Error(
-        error.message || `Request failed with status ${response.status}`
-      );
+    if (isJson) {
+      const data = await response.json();
+
+      // Add status code to the response
+      if (typeof data === "object") {
+        data.statusCode = response.status;
+      }
+
+      if (!response.ok) {
+        // For 409 Conflict, return the response as is
+        if (response.status === 409) {
+          return data as T;
+        }
+        // For other errors, throw them
+        throw new Error(
+          data.message || `Request failed with status ${response.status}`
+        );
+      }
+
+      return data as T;
     }
 
-    if (isJson) {
-      return response.json();
+    // For non-JSON responses, check if the response is ok
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
     }
 
     // For non-JSON responses (like audio streams), return the response itself
@@ -148,7 +161,6 @@ export class ApiClient {
     }
   }
 
-  // Audio streaming methods
   async getAudioStream(songId: string): Promise<Response> {
     const token = this.getAuthToken();
     if (!token) {

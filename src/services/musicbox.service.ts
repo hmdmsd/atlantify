@@ -14,24 +14,50 @@ export const musicBoxService = {
     );
   },
 
-  async createSuggestion(data: { title: string; artist: string }) {
+  async createSuggestion(data: { title: string; artist: string }): Promise<SuggestionResponse> {
+    console.log("=== Starting createSuggestion ===");
     const token = localStorage.getItem("auth_token");
     if (!token) {
       throw new Error("You must be logged in to suggest songs");
     }
 
     try {
+      console.log("1. Sending POST request with data:", data);
       const response = await apiClient.post<SuggestionResponse>(
         "/musicbox/suggestions",
         data
       );
-      if (!response.success) {
-        throw new Error(response.message || "Failed to create suggestion");
+      console.log("2. Raw response from API:", response);
+
+      // Handle successful creation
+      if (response.success && response.suggestion) {
+        console.log("3. Success case - valid suggestion:", response.suggestion);
+        return {
+          success: true,
+          suggestion: response.suggestion,
+          message: "Suggestion created successfully"
+        };
       }
-      return response;
+
+      // Handle existing suggestion case
+      if (response.existingSuggestion) {
+        console.log("3. Duplicate case - existing suggestion found:", response.existingSuggestion);
+        return {
+          success: false,
+          message: "This song has already been suggested.",
+          existingSuggestion: response.existingSuggestion
+        };
+      }
+
+      // If we get here, something unexpected happened
+      console.log("3. Unexpected response format:", response);
+      throw new Error(response.message || "Failed to create suggestion");
+
     } catch (error) {
-      console.error("Create suggestion error:", error);
-      throw error;
+      console.error("4. Error in createSuggestion:", error);
+      throw error instanceof Error ? error : new Error("Failed to create suggestion");
+    } finally {
+      console.log("=== Ending createSuggestion ===");
     }
   },
 
@@ -59,7 +85,7 @@ export const musicBoxService = {
     }
   },
 
-  async deleteSuggestion(suggestionId: string) {
+  async removeSuggestion(suggestionId: string) {
     const token = localStorage.getItem("auth_token");
     if (!token) {
       throw new Error("You must be logged in to delete suggestions");
@@ -78,7 +104,10 @@ export const musicBoxService = {
       return response;
     } catch (error) {
       console.error("Delete suggestion error:", error);
-      throw error;
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to delete suggestion");
     }
   },
 
