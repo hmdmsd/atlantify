@@ -21,13 +21,11 @@ class AudioService extends EventEmitter {
   private static instance: AudioService;
   private audio: HTMLAudioElement;
   private audioContext: AudioContext | null = null;
-  private currentTrack: AudioTrack | null = null;
-  private gainNode: GainNode | null = null;
+  private _currentTrack: AudioTrack | null = null; // Added private field for currentTrack
 
   private constructor() {
     super();
     this.audio = new Audio();
-    // Set audio element attributes
     this.audio.preload = "auto";
     this.setupAudioListeners();
   }
@@ -37,6 +35,11 @@ class AudioService extends EventEmitter {
       AudioService.instance = new AudioService();
     }
     return AudioService.instance;
+  }
+
+  // Getter for currentTrack
+  public get currentTrack(): AudioTrack | null {
+    return this._currentTrack;
   }
 
   private setupAudioListeners(): void {
@@ -70,7 +73,7 @@ class AudioService extends EventEmitter {
 
   public async loadTrack(track: AudioTrack): Promise<void> {
     try {
-      this.currentTrack = track;
+      this._currentTrack = track; // Updated to use private field
 
       // Clean up previous audio source if exists
       if (this.audio.src) {

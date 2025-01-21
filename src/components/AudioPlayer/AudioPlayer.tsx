@@ -1,13 +1,11 @@
 import React from "react";
 import {
-  Play,
   Pause,
   SkipForward,
   SkipBack,
-  Volume2,
-  VolumeX,
   AlertCircle,
   Music2,
+  Play,
 } from "lucide-react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useRadioQueue } from "@/hooks/useRadioQueue";
@@ -18,7 +16,7 @@ interface AudioPlayerProps {
   className?: string;
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
   const {
     currentTrack: playerTrack,
     isPlaying,
@@ -51,13 +49,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
 
   // Determine skip action based on mode
   const handleSkip = isRadioActive ? radioSkipTrack : playerNext;
-
-  const formatTime = (time: number): string => {
-    if (isNaN(time)) return "0:00";
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
 
   const handlePlayClick = () => {
     if (requiresInteraction) {

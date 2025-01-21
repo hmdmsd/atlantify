@@ -14,6 +14,16 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { SongSearchModal } from "@/components/Modals/SongSearchModal";
 import { QueueItem } from "@/components/RadioQueue/QueueItem";
 
+// Define the RadioTrack interface to match what's coming from useRadioQueue
+interface RadioTrack {
+  id: string;
+  title: string;
+  artist: string;
+  url?: string;
+  path?: string;
+  duration: number;
+}
+
 export const RadioPage: React.FC = () => {
   const {
     queue,
@@ -31,8 +41,6 @@ export const RadioPage: React.FC = () => {
   const {
     play,
     pause,
-    currentTrack: playerTrack,
-    isPlaying,
     requiresInteraction,
     error,
     handleUserInteraction,
@@ -44,38 +52,31 @@ export const RadioPage: React.FC = () => {
   // Effect to handle radio activation and track changes
   useEffect(() => {
     if (isRadioActive && radioTrack) {
-      // Set radio mode first
       setRadioMode(true);
-
-      // Log track data for debugging
       console.log("Radio Track Data:", radioTrack);
 
-      // Construct the full audio URL
       const baseUrl = import.meta.env.VITE_API_URL || "";
       const audioUrl = (() => {
+        // Use type assertion since we know radioTrack matches RadioTrack interface
+        const track = radioTrack as RadioTrack;
+        const sourceUrl = track.url || track.path || "";
+
         // If it's already a full URL, use it
-        if (
-          radioTrack.url?.startsWith("http") ||
-          radioTrack.path?.startsWith("http")
-        ) {
-          return radioTrack.url || radioTrack.path;
+        if (sourceUrl.startsWith("http")) {
+          return sourceUrl;
         }
 
         // If it starts with slash, append to base URL
-        if (
-          radioTrack.url?.startsWith("/") ||
-          radioTrack.path?.startsWith("/")
-        ) {
-          return `${baseUrl}${radioTrack.url || radioTrack.path}`;
+        if (sourceUrl.startsWith("/")) {
+          return `${baseUrl}${sourceUrl}`;
         }
 
         // Otherwise, assume it's relative to base URL
-        return `${baseUrl}/${radioTrack.url || radioTrack.path}`;
+        return `${baseUrl}/${sourceUrl}`;
       })();
 
       console.log("Constructed Audio URL:", audioUrl);
 
-      // Format track data with complete URL
       const trackData = {
         id: radioTrack.id,
         title: radioTrack.title,
@@ -84,9 +85,7 @@ export const RadioPage: React.FC = () => {
         duration: radioTrack.duration || 0,
       };
 
-      // Only attempt to play if we have a valid URL
-      if (trackData.url && trackData.url !== "undefined") {
-        // Play the track immediately
+      if (audioUrl && audioUrl !== "undefined") {
         play(trackData, true).catch((error) => {
           console.error("Failed to play track:", error);
         });
@@ -97,7 +96,7 @@ export const RadioPage: React.FC = () => {
       setRadioMode(false);
       pause();
     }
-  }, [isRadioActive, radioTrack?.id]); // Only depend on track ID and radio state
+  }, [isRadioActive, radioTrack?.id, play, pause, setRadioMode]);
 
   const handleAddToQueue = async (songId: string) => {
     try {
@@ -122,6 +121,7 @@ export const RadioPage: React.FC = () => {
     }
   };
 
+  // Rest of the component remains the same
   return (
     <div
       className="p-6 space-y-8 max-w-7xl mx-auto"

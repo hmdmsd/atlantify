@@ -34,7 +34,7 @@ export const useRadioQueue = () => {
   const [availableSongs, setAvailableSongs] = useState<Track[]>([]);
 
   const { lastMessage, isConnected } = useWebSocket();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
 
   // Fetch initial queue data
   const fetchQueueData = useCallback(async () => {
@@ -158,7 +158,7 @@ export const useRadioQueue = () => {
     }
 
     try {
-      const response = await api.post(apiConfig.endpoints.radio.toggle);
+      const response: any = await api.post(apiConfig.endpoints.radio.toggle);
       setIsRadioActive(response.isRadioActive);
       setError(null);
       return response.isRadioActive;

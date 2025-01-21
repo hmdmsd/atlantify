@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Search, Music2, Plus, X, Clock, User } from "lucide-react";
+import { Search, Music2, Plus, X, Clock } from "lucide-react";
 import { useRadioQueue } from "@/hooks/useRadioQueue";
-
-interface Song {
-  id: string;
-  title: string;
-  artist: string;
-  duration: number;
-  publicUrl?: string;
-}
 
 interface SongSearchModalProps {
   onClose: () => void;

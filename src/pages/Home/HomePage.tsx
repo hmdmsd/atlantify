@@ -174,6 +174,7 @@ export const HomePage: React.FC = () => {
                               title: song.title,
                               artist: song.artist,
                               url: song.url,
+                              duration: song.duration, // Add this line
                             })
                       }
                       className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
@@ -232,12 +233,15 @@ export const HomePage: React.FC = () => {
                 >
                   <button
                     onClick={() =>
-                      play({
-                        id: song.id,
-                        title: song.title,
-                        artist: song.artist,
-                        url: song.url,
-                      })
+                      currentTrack?.id === song.id
+                        ? togglePlay()
+                        : play({
+                            id: song.id,
+                            title: song.title,
+                            artist: song.artist,
+                            url: song.url,
+                            duration: song.duration, // Add this line
+                          })
                     }
                     className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
                   >

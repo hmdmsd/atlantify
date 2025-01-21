@@ -8,27 +8,30 @@ import {
   PauseCircle,
   Plus,
 } from "lucide-react";
-import { useSongs } from "@/contexts/SongsContext";
 import { usePlayer } from "@/contexts/PlayerContext";
-import { useAuth } from "@/hooks/useAuth"; // Import useAuth hook
+import { useAuth } from "@/hooks/useAuth";
 import { apiClient, apiConfig } from "@/config/api.config";
 import { SongUploadModal } from "@/components/Modals/SongUploadModal";
 
-// Updated Song interface to match backend response
-interface Song {
+// Base Song interface
+interface BaseSong {
   id: string;
   title: string;
   artist: string;
-  path: string;
-  size: number;
   duration: number;
+  path: string;
+  publicUrl?: string;
+}
+
+// Extended Song interface with additional properties
+interface Song extends BaseSong {
+  size: number;
   uploadedBy: string;
   createdAt: string;
   updatedAt: string;
-  publicUrl: string;
 }
 
-// Track interface for player context
+// Track interface for player
 interface Track {
   id: string;
   title: string;
@@ -45,32 +48,31 @@ export const SearchPage: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const { currentTrack, isPlaying, play, pause } = usePlayer();
-  const { fetchSongs } = useSongs();
 
-  // Get isAdmin and isAuthenticated from useAuth
-  const { isAdmin, isAuthenticated } = useAuth();
+  const { isAdmin } = useAuth();
+
+  const loadInitialSongs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.get<{ success: boolean; songs: Song[] }>(
+        apiConfig.endpoints.songs.list
+      );
+      setResults(response.songs);
+    } catch (error) {
+      console.error("Error loading songs:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadSongs = async () => {
-      setIsLoading(true);
-      try {
-        const songs = await fetchSongs();
-        setResults(songs);
-      } catch (error) {
-        console.error("Error loading songs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadSongs();
-  }, [fetchSongs]);
+    loadInitialSongs();
+  }, [loadInitialSongs]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) {
-      const songs = await fetchSongs();
-      setResults(songs);
+      loadInitialSongs();
       return;
     }
 
@@ -89,22 +91,16 @@ export const SearchPage: React.FC = () => {
     }
   };
 
-  const handleAddTrack = useCallback(
-    async (songId: string) => {
-      try {
-        // Refresh the song list after upload
-        const songs = await fetchSongs();
-        setResults(songs);
-        setShowUploadModal(false);
-      } catch (err) {
-        console.error("Failed to add track", err);
-      }
-    },
-    [fetchSongs]
-  );
+  const handleAddTrack = useCallback(async () => {
+    try {
+      await loadInitialSongs();
+      setShowUploadModal(false);
+    } catch (err) {
+      console.error("Failed to refresh tracks", err);
+    }
+  }, [loadInitialSongs]);
 
   const handleTogglePlay = (song: Song) => {
-    // Ensure we always have a valid URL
     const trackUrl = song.publicUrl || song.path;
 
     const trackData: Track = {
@@ -142,7 +138,6 @@ export const SearchPage: React.FC = () => {
           </h1>
           <p className="mt-2 text-neutral-400">Find your favorite songs</p>
         </div>
-        {/* Only show Add Track button to authenticated admins */}
         {isAdmin && (
           <button
             onClick={() => setShowUploadModal(true)}
@@ -236,7 +231,6 @@ export const SearchPage: React.FC = () => {
         )}
       </div>
 
-      {/* Upload Modal - Only show for admin users */}
       {isAdmin && showUploadModal && (
         <SongUploadModal
           onClose={() => setShowUploadModal(false)}

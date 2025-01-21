@@ -27,7 +27,6 @@ export const useAudioPlayer = () => {
   } = useRadioQueue();
 
   const audioRef = useRef(new Audio());
-  const trackEndTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Setup audio event listeners
   useEffect(() => {

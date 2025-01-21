@@ -2,6 +2,17 @@ import React, { createContext, useContext, useState } from "react";
 import { audioService } from "../services/audio.service";
 import { apiClient, apiConfig } from "../config/api.config";
 
+interface AudioTrack {
+  id: string;
+  title: string;
+  artist: string;
+  url: string;
+  duration: number;
+  headers?: {
+    Authorization: string;
+  };
+}
+
 interface Song {
   id: string;
   title: string;
@@ -72,7 +83,7 @@ export const SongsProvider: React.FC<{ children: React.ReactNode }> = ({
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      });
+      } as AudioTrack);
 
       await audioService.play();
       setCurrentSong(song);
