@@ -10,7 +10,6 @@ import { HomePage } from "../pages/Home/HomePage";
 import { MusicBoxPage } from "../pages/MusicBox/MusicBoxPage";
 import { ProfilePage } from "../pages/Profile/ProfilePage";
 import { RadioPage } from "../pages/Radio/RadioPage";
-import { QueuePage } from "../pages/Queue/QueuePage";
 import { SearchPage } from "../pages/Search/SearchPage";
 import { PlaylistsPage } from "../pages/Playlists/PlaylistsPage";
 import { LikedSongsPage } from "../pages/LikedSongs/LikedSongsPage";
@@ -30,7 +29,6 @@ export const AppRoutes: React.FC = () => {
         <Route path="/music-box" element={<MusicBoxPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/radio" element={<RadioPage />} />
-        <Route path="/queue" element={<QueuePage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/liked" element={<LikedSongsPage />} />

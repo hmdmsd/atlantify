@@ -1,9 +1,7 @@
-import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
 import { AudioPlayer } from "@/components/AudioPlayer/AudioPlayer";
-import { usePlayer } from "@/contexts/PlayerContext";
 
 export const ProtectedLayout = () => {
   const { isAuthenticated, isLoading } = useAuth();

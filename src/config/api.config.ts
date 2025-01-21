@@ -19,6 +19,7 @@ export const apiConfig = {
       addToQueue: "/radio/queue",
       removeFromQueue: (id: string) => `/radio/queue/${id}`,
       skip: "/radio/skip",
+      toggle: "/radio/toggle",
       history: "/radio/history",
     },
     songs: {

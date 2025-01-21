@@ -127,6 +127,9 @@ export const useAuth = () => {
     setState((prev) => ({ ...prev, error: null }));
   };
 
+  // Getter for checking if the user is an admin
+  const isAdmin = state.user?.role === "admin";
+
   return {
     ...state,
     login,
@@ -134,5 +137,6 @@ export const useAuth = () => {
     logout,
     clearError,
     checkAuth,
+    isAdmin, // Add isAdmin to the returned object
   };
 };

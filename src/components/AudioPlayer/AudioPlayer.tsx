@@ -9,6 +9,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { usePlayer } from "@/contexts/PlayerContext";
+import { useRadioQueue } from "@/hooks/useRadioQueue";
+import { VolumeControl } from "./VolumeControl";
+import { ProgressBar } from "./ProgressBar";
 
 interface AudioPlayerProps {
   className?: string;
@@ -16,7 +19,7 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
   const {
-    currentTrack,
+    currentTrack: playerTrack,
     isPlaying,
     currentTime,
     duration,
@@ -24,13 +27,25 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
     isMuted,
     isLoading,
     error,
-    togglePlay,
+    togglePlay: togglePlayerPlay,
     seek,
-    next,
+    next: playerNext,
     previous,
     setVolume,
     toggleMute,
   } = usePlayer();
+
+  const {
+    currentTrack: radioTrack,
+    isRadioActive,
+    skipTrack: radioSkipTrack,
+  } = useRadioQueue();
+
+  // Determine the current track (prioritize radio track if radio is active)
+  const currentTrack = isRadioActive ? radioTrack : playerTrack;
+
+  // Determine skip action based on mode
+  const handleSkip = isRadioActive ? radioSkipTrack : playerNext;
 
   const formatTime = (time: number): string => {
     if (isNaN(time)) return "0:00";
@@ -39,6 +54,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  // If no track is playing, don't render the player
   if (!currentTrack) {
     return null;
   }
@@ -59,6 +75,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
               <p className="text-sm text-neutral-400 truncate">
                 {currentTrack.artist}
               </p>
+              {/* Radio Mode Indicator */}
+              {isRadioActive && (
+                <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                  Radio Mode
+                </span>
+              )}
               {error && (
                 <div className="flex items-center gap-2 text-red-500 text-sm mt-1">
                   <AlertCircle className="w-4 h-4" />
@@ -80,9 +102,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
               </button>
 
               <button
-                onClick={togglePlay}
-                disabled={isLoading}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                onClick={isRadioActive ? undefined : togglePlayerPlay}
+                disabled={isLoading || isRadioActive}
+                className={`
+                  w-10 h-10 flex items-center justify-center rounded-full 
+                  ${
+                    isRadioActive
+                      ? "bg-neutral-700 text-neutral-400 cursor-not-allowed"
+                      : "bg-white text-black hover:bg-neutral-200"
+                  }
+                  transition-colors disabled:opacity-50
+                `}
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-neutral-600 border-t-neutral-200 rounded-full animate-spin" />
@@ -94,7 +124,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
               </button>
 
               <button
-                onClick={next}
+                onClick={handleSkip}
                 className="text-neutral-400 hover:text-white transition-colors p-2 rounded-full hover:bg-neutral-800"
               >
                 <SkipForward className="w-5 h-5" />
@@ -102,66 +132,26 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = "" }) => {
             </div>
 
             {/* Progress Bar */}
-            <div className="flex items-center gap-2 w-full">
-              <span className="text-xs text-neutral-400 w-10 text-right">
-                {formatTime(currentTime)}
-              </span>
-              <div className="flex-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 100}
-                  value={currentTime}
-                  onChange={(e) => seek(parseFloat(e.target.value))}
-                  className="w-full h-1 bg-neutral-700 rounded-full appearance-none cursor-pointer
-                    [&::-webkit-slider-thumb]:appearance-none
-                    [&::-webkit-slider-thumb]:w-3
-                    [&::-webkit-slider-thumb]:h-3
-                    [&::-webkit-slider-thumb]:rounded-full
-                    [&::-webkit-slider-thumb]:bg-white
-                    [&::-webkit-slider-thumb]:cursor-grab
-                    [&::-webkit-slider-thumb]:active:cursor-grabbing"
-                />
-              </div>
-              <span className="text-xs text-neutral-400 w-10">
-                {formatTime(duration)}
-              </span>
-            </div>
+            <ProgressBar
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={seek}
+            />
           </div>
 
           {/* Volume Control */}
           <div className="flex items-center gap-2 flex-1 justify-end">
-            <button
-              onClick={toggleMute}
-              className="text-neutral-400 hover:text-white transition-colors p-2 rounded-full hover:bg-neutral-800"
-            >
-              {isMuted || volume === 0 ? (
-                <VolumeX className="w-5 h-5" />
-              ) : (
-                <Volume2 className="w-5 h-5" />
-              )}
-            </button>
-            <div className="w-24">
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={isMuted ? 0 : volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-full h-1 bg-neutral-700 rounded-full appearance-none cursor-pointer
-                  [&::-webkit-slider-thumb]:appearance-none
-                  [&::-webkit-slider-thumb]:w-3
-                  [&::-webkit-slider-thumb]:h-3
-                  [&::-webkit-slider-thumb]:rounded-full
-                  [&::-webkit-slider-thumb]:bg-white
-                  [&::-webkit-slider-thumb]:cursor-grab
-                  [&::-webkit-slider-thumb]:active:cursor-grabbing"
-              />
-            </div>
+            <VolumeControl
+              volume={volume}
+              isMuted={isMuted}
+              onVolumeChange={setVolume}
+              onMuteToggle={toggleMute}
+            />
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default AudioPlayer;

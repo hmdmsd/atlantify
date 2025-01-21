@@ -10,16 +10,31 @@ import {
 } from "lucide-react";
 import { useSongs } from "@/contexts/SongsContext";
 import { usePlayer } from "@/contexts/PlayerContext";
+import { useAuth } from "@/hooks/useAuth"; // Import useAuth hook
 import { apiClient, apiConfig } from "@/config/api.config";
 import { SongUploadModal } from "@/components/Modals/SongUploadModal";
 
+// Updated Song interface to match backend response
 interface Song {
+  id: string;
+  title: string;
+  artist: string;
+  path: string;
+  size: number;
+  duration: number;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  publicUrl: string;
+}
+
+// Track interface for player context
+interface Track {
   id: string;
   title: string;
   artist: string;
   url: string;
   duration: number;
-  publicUrl?: string;
 }
 
 export const SearchPage: React.FC = () => {
@@ -31,6 +46,9 @@ export const SearchPage: React.FC = () => {
 
   const { currentTrack, isPlaying, play, pause } = usePlayer();
   const { fetchSongs } = useSongs();
+
+  // Get isAdmin and isAuthenticated from useAuth
+  const { isAdmin, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const loadSongs = async () => {
@@ -86,11 +104,14 @@ export const SearchPage: React.FC = () => {
   );
 
   const handleTogglePlay = (song: Song) => {
-    const trackData = {
+    // Ensure we always have a valid URL
+    const trackUrl = song.publicUrl || song.path;
+
+    const trackData: Track = {
       id: song.id,
       title: song.title,
       artist: song.artist,
-      url: song.url || song.publicUrl,
+      url: trackUrl,
       duration: song.duration,
     };
 
@@ -121,13 +142,16 @@ export const SearchPage: React.FC = () => {
           </h1>
           <p className="mt-2 text-neutral-400">Find your favorite songs</p>
         </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Add Track
-        </button>
+        {/* Only show Add Track button to authenticated admins */}
+        {isAdmin && (
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            Add Track
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSearch} className="relative">
@@ -212,8 +236,8 @@ export const SearchPage: React.FC = () => {
         )}
       </div>
 
-      {/* Upload Modal */}
-      {showUploadModal && (
+      {/* Upload Modal - Only show for admin users */}
+      {isAdmin && showUploadModal && (
         <SongUploadModal
           onClose={() => setShowUploadModal(false)}
           onAddTrack={handleAddTrack}

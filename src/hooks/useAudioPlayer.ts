@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRadioQueue } from "./useRadioQueue";
 
 interface Track {
@@ -6,6 +6,7 @@ interface Track {
   title: string;
   artist: string;
   url: string;
+  duration: number;
 }
 
 export const useAudioPlayer = () => {
@@ -16,113 +17,164 @@ export const useAudioPlayer = () => {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Import skipTrack from useRadioQueue
-  const { currentTrack: radioTrack, skipTrack } = useRadioQueue();
+  // Import radio-specific functionality
+  const {
+    currentTrack: radioTrack,
+    isRadioActive,
+    skipTrack,
+  } = useRadioQueue();
 
   const audioRef = useRef(new Audio());
+  const trackEndTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Setup audio event listeners
   useEffect(() => {
     const audio = audioRef.current;
 
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleDurationChange = () => setDuration(audio.duration);
-    const handleEnded = () => {
-      setIsPlaying(false);
-      // Auto advance to next track in radio mode
-      if (radioTrack && skipTrack) {
-        skipTrack();
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setIsLoading(false);
+
+      // If playing, start playback
+      if (isPlaying) {
+        audio.play().catch(console.error);
       }
     };
-    const handleError = () => {
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+
+      // In radio mode, let the backend handle track progression
+      if (isRadioActive) {
+        skipTrack().catch(console.error);
+      }
+    };
+
+    const handleError = (e: Event) => {
+      console.error("Audio playback error", e);
+      setError("Failed to play audio");
       setIsPlaying(false);
       setIsLoading(false);
-      console.error("Audio playback error");
     };
-    const handleLoadStart = () => setIsLoading(true);
-    const handleCanPlay = () => setIsLoading(false);
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("durationchange", handleDurationChange);
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
-    audio.addEventListener("loadstart", handleLoadStart);
-    audio.addEventListener("canplay", handleCanPlay);
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("durationchange", handleDurationChange);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
-      audio.removeEventListener("loadstart", handleLoadStart);
-      audio.removeEventListener("canplay", handleCanPlay);
     };
-  }, [radioTrack, skipTrack]);
+  }, [isRadioActive, skipTrack]);
 
+  // Handle track changes
   useEffect(() => {
-    if (currentTrack?.url) {
-      audioRef.current.src = currentTrack.url;
-      audioRef.current.load();
-      if (isPlaying) {
-        audioRef.current.play();
+    // Prioritize radio track when radio is active
+    const trackToPlay = isRadioActive ? radioTrack : currentTrack;
+
+    if (trackToPlay) {
+      // Update current track
+      setCurrentTrack(trackToPlay);
+
+      // Set audio source
+      if (audioRef.current) {
+        audioRef.current.src = trackToPlay.url;
+        audioRef.current.load();
+
+        // Auto-play if radio is active or currently playing
+        if (isRadioActive || isPlaying) {
+          audioRef.current.play().catch((err) => {
+            console.error("Playback error:", err);
+            setError("Failed to play track");
+          });
+        }
       }
     }
-  }, [currentTrack]);
+  }, [radioTrack, isRadioActive, currentTrack]);
 
-  useEffect(() => {
-    if (radioTrack) {
-      setCurrentTrack(radioTrack);
-      play(radioTrack);
-    }
-  }, [radioTrack]);
+  // Play method
+  const play = useCallback(
+    async (track?: Track) => {
+      try {
+        // If a specific track is provided, set it as current
+        if (track) {
+          setCurrentTrack(track);
+          audioRef.current.src = track.url;
+          await audioRef.current.load();
+        }
 
-  const play = async (track?: Track) => {
-    if (track) {
-      setCurrentTrack(track);
-    }
+        // Ensure we have a track to play
+        if (!currentTrack && !track) {
+          throw new Error("No track to play");
+        }
 
-    try {
-      setIsLoading(true);
-      await audioRef.current.play();
-      setIsPlaying(true);
-    } catch (error) {
-      console.error("Playback failed:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        // Start playback
+        await audioRef.current.play();
+        setIsPlaying(true);
+        setError(null);
+      } catch (err) {
+        console.error("Playback error:", err);
+        setIsPlaying(false);
+        setError("Failed to play audio");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentTrack]
+  );
 
-  const pause = () => {
+  // Pause method
+  const pause = useCallback(() => {
     audioRef.current.pause();
     setIsPlaying(false);
-  };
+  }, []);
 
-  const togglePlay = () => {
+  // Toggle play/pause
+  const togglePlay = useCallback(() => {
     if (isPlaying) {
       pause();
     } else {
       play();
     }
-  };
+  }, [isPlaying, play, pause]);
 
-  const seek = (time: number) => {
-    audioRef.current.currentTime = time;
-    setCurrentTime(time);
-  };
+  // Seek to specific time
+  const seek = useCallback(
+    (time: number) => {
+      // Prevent seeking in radio mode
+      if (!isRadioActive) {
+        audioRef.current.currentTime = time;
+        setCurrentTime(time);
+      }
+    },
+    [isRadioActive]
+  );
 
-  const setAudioVolume = (value: number) => {
-    audioRef.current.volume = value;
-    setVolume(value);
-    setIsMuted(value === 0);
-  };
+  // Volume control
+  const setAudioVolume = useCallback((value: number) => {
+    const safeValue = Math.max(0, Math.min(1, value));
+    audioRef.current.volume = safeValue;
+    setVolume(safeValue);
+    setIsMuted(safeValue === 0);
+  }, []);
 
-  const toggleMute = () => {
+  // Toggle mute
+  const toggleMute = useCallback(() => {
     if (isMuted) {
       setAudioVolume(volume || 1);
     } else {
       setAudioVolume(0);
     }
-  };
+  }, [isMuted, volume]);
 
   return {
     currentTrack,
@@ -132,6 +184,7 @@ export const useAudioPlayer = () => {
     currentTime,
     volume,
     isMuted,
+    error,
     play,
     pause,
     togglePlay,

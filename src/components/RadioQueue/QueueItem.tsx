@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, User } from "lucide-react";
+import { Clock, User, Trash2 } from "lucide-react";
 
 interface Track {
   id: string;
@@ -17,12 +17,14 @@ interface QueueItemProps {
   track: Track;
   isCurrentTrack: boolean;
   position: number;
+  onRemove?: () => void;
 }
 
 export const QueueItem: React.FC<QueueItemProps> = ({
   track,
   isCurrentTrack,
   position,
+  onRemove,
 }) => {
   const formatDuration = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -42,9 +44,10 @@ export const QueueItem: React.FC<QueueItemProps> = ({
       className={`
         p-4 border-b last:border-b-0 transition-colors
         ${isCurrentTrack ? "bg-blue-50" : "hover:bg-gray-50"}
+        flex items-center justify-between
       `}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-1">
         <div className="w-8 text-center font-medium text-gray-500">
           {position}
         </div>
@@ -73,6 +76,16 @@ export const QueueItem: React.FC<QueueItemProps> = ({
           </div>
         </div>
       </div>
+
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="text-red-500 hover:text-red-700 transition-colors ml-4"
+          title="Remove from queue"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      )}
     </div>
   );
 };
