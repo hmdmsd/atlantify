@@ -1,72 +1,114 @@
 import React, { useState, useEffect } from "react";
-import { Heart, Play, Pause, Music2 } from "lucide-react";
+import { Heart, Play, Pause, Music2, Loader } from "lucide-react";
+import { usePlayer } from "@/contexts/PlayerContext";
+import { likedSongsService } from "@/services/liked-songs.service";
+import { songStatsService } from "@/services/song-stats.service";
+import { useAuth } from "@/hooks/useAuth";
 
-// Mock interface for a song (replace with actual type from your API)
+// Adjusted type to match the nested structure
 interface LikedSong {
   id: string;
+  likedId: string;
   title: string;
   artist: string;
-  album: string;
   duration: number;
-  addedAt: string;
-  albumArtUrl?: string;
+  path: string;
+  publicUrl: string | null;
+  createdAt: string;
 }
 
 export const LikedSongsPage: React.FC = () => {
   const [likedSongs, setLikedSongs] = useState<LikedSong[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPlayingSong, setCurrentPlayingSong] = useState<string | null>(
-    null
-  );
+  const [error, setError] = useState<string | null>(null);
+  const { currentTrack, isPlaying, play, pause, playMultiple } = usePlayer();
+  const { isAuthenticated } = useAuth();
 
-  // Simulated fetch of liked songs (replace with actual API call)
   useEffect(() => {
-    const fetchLikedSongs = async () => {
-      try {
-        // Simulate API delay and data
-        await new Promise((resolve) => setTimeout(resolve, 500));
+    if (isAuthenticated) {
+      fetchLikedSongs();
+    }
+  }, [isAuthenticated]);
 
-        const mockLikedSongs: LikedSong[] = [
-          {
-            id: "1",
-            title: "Blinding Lights",
-            artist: "The Weeknd",
-            album: "After Hours",
-            duration: 200,
-            addedAt: "2023-06-15T10:30:00Z",
-            albumArtUrl: "/api/album-art/blinding-lights.jpg",
-          },
-          {
-            id: "2",
-            title: "Levitating",
-            artist: "Dua Lipa",
-            album: "Future Nostalgia",
-            duration: 203,
-            addedAt: "2023-07-20T15:45:00Z",
-            albumArtUrl: "/api/album-art/levitating.jpg",
-          },
-          // Add more mock songs
-        ];
-
-        setLikedSongs(mockLikedSongs);
-      } catch (error) {
-        console.error("Failed to fetch liked songs", error);
-      } finally {
-        setIsLoading(false);
+  const fetchLikedSongs = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await likedSongsService.getLikedSongs();
+      if (response.success) {
+        // Extract actual song data from nested structure
+        const extractedSongs = response.songs.map((likedSong: any) => ({
+          ...likedSong.song,
+          likedId: likedSong.id,
+          createdAt: likedSong.createdAt,
+        }));
+        setLikedSongs(extractedSongs);
       }
+    } catch (err) {
+      setError("Failed to fetch liked songs");
+      console.error("Error fetching liked songs:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePlayAll = () => {
+    if (likedSongs.length > 0) {
+      const tracks = likedSongs.map((song) => ({
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        duration: song.duration,
+        url: song.publicUrl || song.path,
+      }));
+      playMultiple(tracks);
+    }
+  };
+
+  const handleTogglePlay = async (song: LikedSong) => {
+    const trackData = {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      duration: song.duration,
+      url: song.publicUrl || song.path,
     };
 
-    fetchLikedSongs();
-  }, []);
+    try {
+      if (currentTrack?.id === song.id) {
+        if (isPlaying) {
+          pause();
+        } else {
+          play(trackData);
+        }
+      } else {
+        play(trackData);
+        // Increment play count
+        await songStatsService.incrementPlayCount(song.id);
+      }
+    } catch (err) {
+      console.error("Error handling playback:", err);
+    }
+  };
 
-  // Format duration to MM:SS
+  const handleUnlike = async (songId: string) => {
+    try {
+      const response = await likedSongsService.toggleLikeSong(songId);
+      if (response.success) {
+        // Remove song from the list
+        setLikedSongs((prev) => prev.filter((song) => song.id !== songId));
+      }
+    } catch (err) {
+      console.error("Error unliking song:", err);
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -75,15 +117,16 @@ export const LikedSongsPage: React.FC = () => {
     });
   };
 
-  // Toggle play/pause for a song
-  const togglePlaySong = (songId: string) => {
-    setCurrentPlayingSong(currentPlayingSong === songId ? null : songId);
-  };
-
-  // Unlike a song
-  const unlikeSong = (songId: string) => {
-    setLikedSongs(likedSongs.filter((song) => song.id !== songId));
-  };
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <div className="text-center text-neutral-400">
+          <Heart className="mx-auto h-12 w-12 mb-4 text-blue-500 opacity-50" />
+          <p>Please log in to see your liked songs</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
@@ -102,6 +145,7 @@ export const LikedSongsPage: React.FC = () => {
           <div className="flex items-center space-x-4">
             <span className="text-neutral-400">{likedSongs.length} songs</span>
             <button
+              onClick={handlePlayAll}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors"
               title="Play All Liked Songs"
             >
@@ -111,11 +155,17 @@ export const LikedSongsPage: React.FC = () => {
         )}
       </div>
 
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
       {/* Liked Songs List */}
       <div className="bg-neutral-900 rounded-xl border border-neutral-800">
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            <Loader className="h-8 w-8 animate-spin text-blue-500" />
           </div>
         ) : likedSongs.length === 0 ? (
           <div className="text-center py-12 text-neutral-500">
@@ -131,17 +181,9 @@ export const LikedSongsPage: React.FC = () => {
               >
                 {/* Album Art */}
                 <div className="mr-4">
-                  {song.albumArtUrl ? (
-                    <img
-                      src={song.albumArtUrl}
-                      alt={song.album}
-                      className="w-12 h-12 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-neutral-400">
-                      <Music2 className="w-6 h-6" />
-                    </div>
-                  )}
+                  <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-neutral-400">
+                    <Music2 className="w-6 h-6" />
+                  </div>
                 </div>
 
                 {/* Song Info */}
@@ -150,13 +192,13 @@ export const LikedSongsPage: React.FC = () => {
                     {song.title}
                   </h3>
                   <p className="text-sm text-neutral-400 truncate">
-                    {song.artist} • {song.album}
+                    {song.artist}
                   </p>
                 </div>
 
                 {/* Added Date */}
                 <div className="text-neutral-400 text-sm mr-4 hidden md:block">
-                  {formatDate(song.addedAt)}
+                  {formatDate(song.createdAt)}
                 </div>
 
                 {/* Duration */}
@@ -167,18 +209,22 @@ export const LikedSongsPage: React.FC = () => {
                 {/* Actions */}
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => togglePlaySong(song.id)}
+                    onClick={() => handleTogglePlay(song)}
                     className="text-neutral-400 hover:text-blue-500 transition-colors"
-                    title={currentPlayingSong === song.id ? "Pause" : "Play"}
+                    title={
+                      currentTrack?.id === song.id && isPlaying
+                        ? "Pause"
+                        : "Play"
+                    }
                   >
-                    {currentPlayingSong === song.id ? (
+                    {currentTrack?.id === song.id && isPlaying ? (
                       <Pause className="w-5 h-5" />
                     ) : (
                       <Play className="w-5 h-5" />
                     )}
                   </button>
                   <button
-                    onClick={() => unlikeSong(song.id)}
+                    onClick={() => handleUnlike(song.id)}
                     className="text-red-500 hover:text-red-400 transition-colors"
                     title="Remove from Liked Songs"
                   >

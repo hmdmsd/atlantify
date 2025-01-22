@@ -10,46 +10,53 @@ import {
   TrendingUp,
   Disc3,
 } from "lucide-react";
+
+// Import services
+import { songStatsService } from "@/services/song-stats.service";
 import { useAuth } from "@/hooks/useAuth";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
-import { useRadioQueue } from "@/hooks/useRadioQueue";
-
-interface Song {
-  id: string;
-  title: string;
-  artist: string;
-  url: string;
-  duration: number;
-  addedBy: string;
-  addedAt: string;
-  albumArt?: string;
-}
+import { Song } from "@/types/song.types";
 
 export const HomePage: React.FC = () => {
   const { user } = useAuth();
   const { currentTrack, play, isPlaying, togglePlay } = useAudioPlayer();
-  const { queue } = useRadioQueue();
+
+  // State for various data
   const [recentlyPlayed, setRecentlyPlayed] = useState<Song[]>([]);
   const [recommendedTracks, setRecommendedTracks] = useState<Song[]>([]);
+  const [globalStats, setGlobalStats] = useState<{
+    totalPlays: number;
+    uniqueListeners: number;
+    topGenres: { name: string; count: number }[];
+  }>({
+    totalPlays: 0,
+    uniqueListeners: 0,
+    topGenres: [],
+  });
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchHomePageData = async () => {
       try {
-        const [recentResponse, recommendedResponse] = await Promise.all([
-          fetch("/api/songs/recently-played"),
-          fetch("/api/songs/recommended"),
-        ]);
+        // Fetch recently played tracks
+        const recentResponse = await songStatsService.getRecentlyPlayed(5);
+        if (recentResponse.success) {
+          setRecentlyPlayed(recentResponse.songs);
+        }
 
-        if (!recentResponse.ok || !recommendedResponse.ok)
-          throw new Error("Failed to fetch songs");
+        // Fetch recommended/trending tracks
+        const trendingResponse = await songStatsService.getTrendingSongs();
+        if (trendingResponse.success) {
+          setRecommendedTracks(trendingResponse.songs);
+        }
 
-        const recentData = await recentResponse.json();
-        const recommendedData = await recommendedResponse.json();
-
-        setRecentlyPlayed(recentData);
-        setRecommendedTracks(recommendedData);
+        // Fetch global stats
+        const globalStatsResponse = await songStatsService.getGlobalStats();
+        if (globalStatsResponse.success) {
+          setGlobalStats(globalStatsResponse.stats);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
@@ -57,7 +64,7 @@ export const HomePage: React.FC = () => {
       }
     };
 
-    fetchData();
+    fetchHomePageData();
   }, []);
 
   const formatDuration = (seconds: number): string => {
@@ -77,7 +84,7 @@ export const HomePage: React.FC = () => {
   const quickActions = [
     {
       title: "Radio Station",
-      description: `${queue.length} tracks in queue`,
+      description: "Discover new music",
       icon: <Radio className="h-8 w-8" />,
       bgColor: "bg-blue-500/10",
       textColor: "text-blue-500",
@@ -106,7 +113,7 @@ export const HomePage: React.FC = () => {
       {/* Welcome Section */}
       <div>
         <h1 className="text-4xl font-bold text-white mb-4">
-          Good evening, {user?.username}
+          Good evening, {user?.username || "Music Lover"}
         </h1>
         <p className="text-neutral-400 text-lg">
           Discover new music, explore your favorites, and keep the rhythm going.
@@ -173,8 +180,8 @@ export const HomePage: React.FC = () => {
                               id: song.id,
                               title: song.title,
                               artist: song.artist,
-                              url: song.url,
-                              duration: song.duration, // Add this line
+                              url: song.path,
+                              duration: song.duration,
                             })
                       }
                       className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
@@ -239,8 +246,8 @@ export const HomePage: React.FC = () => {
                             id: song.id,
                             title: song.title,
                             artist: song.artist,
-                            url: song.url,
-                            duration: song.duration, // Add this line
+                            url: song.path,
+                            duration: song.duration,
                           })
                     }
                     className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
@@ -282,13 +289,37 @@ export const HomePage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-neutral-400 text-sm">Total Tracks</p>
-              <p className="text-2xl font-bold text-white">256</p>
+              <p className="text-neutral-400 text-sm">Total Plays</p>
+              <p className="text-2xl font-bold text-white">
+                {globalStats.totalPlays.toLocaleString()}
+              </p>
             </div>
             <div>
-              <p className="text-neutral-400 text-sm">Listening Hours</p>
-              <p className="text-2xl font-bold text-white">42h</p>
+              <p className="text-neutral-400 text-sm">Unique Listeners</p>
+              <p className="text-2xl font-bold text-white">
+                {globalStats.uniqueListeners.toLocaleString()}
+              </p>
             </div>
+          </div>
+        </div>
+
+        {/* Top Genres */}
+        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <TrendingUp className="w-6 h-6 text-blue-500" />
+              Top Genres
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {globalStats.topGenres.slice(0, 3).map((genre) => (
+              <div key={genre.name} className="flex justify-between">
+                <span className="text-neutral-400">{genre.name}</span>
+                <span className="text-white font-semibold">
+                  {genre.count.toLocaleString()}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 

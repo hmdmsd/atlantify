@@ -14,6 +14,7 @@ import { SearchPage } from "../pages/Search/SearchPage";
 import { PlaylistsPage } from "../pages/Playlists/PlaylistsPage";
 import { LikedSongsPage } from "../pages/LikedSongs/LikedSongsPage";
 import { SettingsPage } from "../pages/Settings/SettingsPage";
+import { PlaylistPage } from "@/pages/Playlists/PlaylistPage";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -31,6 +32,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="/radio" element={<RadioPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
+        <Route path="/playlists/:id" element={<PlaylistPage />} />{" "}
+        {/* New route */}
         <Route path="/liked" element={<LikedSongsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

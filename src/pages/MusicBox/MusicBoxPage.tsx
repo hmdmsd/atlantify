@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Send, Music2, Search, Loader, ChevronDown } from "lucide-react";
-
 import { musicBoxService } from "@/services/musicbox.service";
 import { Suggestion, SuggestionFilters } from "@/types/suggestion.types";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,9 +11,10 @@ interface NewSuggestion {
 }
 
 export const MusicBoxPage: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isAdmin } = useAuth();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [duplicateSuggestion, setDuplicateSuggestion] = useState<Suggestion | null>(null);
+  const [duplicateSuggestion, setDuplicateSuggestion] =
+    useState<Suggestion | null>(null);
   const [newSuggestion, setNewSuggestion] = useState<NewSuggestion>({
     title: "",
     artist: "",
@@ -47,7 +47,6 @@ export const MusicBoxPage: React.FC = () => {
 
         setHasMore(fetchedSuggestions.length === filters.limit);
 
-        // Only update the page if we're not already on page 1
         if (resetPage && filters.page !== 1) {
           setFilters((prev) => ({ ...prev, page: 1 }));
         }
@@ -59,13 +58,12 @@ export const MusicBoxPage: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [filters.page, filters.limit, filters.sort, filters.search] // Only depend on specific filter properties you use
-);
+    [filters.page, filters.limit, filters.sort, filters.search]
+  );
 
-// Change the useEffect to run only when specific filters change
-useEffect(() => {
+  useEffect(() => {
     fetchSuggestions(true);
-}, [filters.sort, filters.search]); // Only re-fetch when sort or search changes
+  }, [filters.sort, filters.search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,17 +76,21 @@ useEffect(() => {
 
     try {
       const response = await musicBoxService.createSuggestion(newSuggestion);
-      
+
       if (!response.success) {
         if (response.existingSuggestion) {
           setDuplicateSuggestion(response.existingSuggestion);
           setError("This song has already been suggested.");
-          // Optionally scroll to the existing suggestion
-          const element = document.getElementById(`suggestion-${response.existingSuggestion.id}`);
+          const element = document.getElementById(
+            `suggestion-${response.existingSuggestion.id}`
+          );
           if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
-            element.classList.add('highlight-suggestion');
-            setTimeout(() => element.classList.remove('highlight-suggestion'), 2000);
+            element.scrollIntoView({ behavior: "smooth" });
+            element.classList.add("highlight-suggestion");
+            setTimeout(
+              () => element.classList.remove("highlight-suggestion"),
+              2000
+            );
           }
         } else {
           setError(response.message || "Failed to add suggestion");
@@ -153,6 +155,38 @@ useEffect(() => {
     }
   };
 
+  const handleStatusUpdate = async (
+    suggestionId: string,
+    status: "approved" | "rejected"
+  ) => {
+    if (!isAuthenticated || !isAdmin) {
+      setError("Only administrators can update suggestion status");
+      return;
+    }
+
+    try {
+      const response = await musicBoxService.updateSuggestionStatus(
+        suggestionId,
+        status
+      );
+      if (response.success) {
+        setSuggestions((prev) =>
+          prev.map((s) =>
+            s.id === suggestionId
+              ? { ...s, status: response.suggestion.status }
+              : s
+          )
+        );
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update suggestion status"
+      );
+    }
+  };
+
   const handleLoadMore = () => {
     setFilters((prev: any) => ({ ...prev, page: prev.page + 1 }));
   };
@@ -161,6 +195,14 @@ useEffect(() => {
     setFilters((prev) => ({
       ...prev,
       search: searchTerm,
+      page: 1,
+    }));
+  };
+
+  const handleSort = (sortType: "popular" | "newest") => {
+    setFilters((prev) => ({
+      ...prev,
+      sort: sortType,
       page: 1,
     }));
   };
@@ -241,36 +283,64 @@ useEffect(() => {
         </form>
       </div>
 
-      {/* Search Input */}
-      <div className="relative mb-6">
-        <input
-          type="text"
-          placeholder="Search suggestions..."
-          onChange={(e) => handleSearch(e.target.value)}
-          className="w-full px-4 py-3 pl-10 pr-4 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
-        />
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-5 h-5" />
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Search suggestions..."
+            onChange={(e) => handleSearch(e.target.value)}
+            className="w-full px-4 py-3 pl-10 pr-4 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-5 h-5" />
+        </div>
+
+        {/* Sort Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSort("popular")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              filters.sort === "popular"
+                ? "bg-blue-500 text-white"
+                : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+            }`}
+          >
+            Most Popular
+          </button>
+          <button
+            onClick={() => handleSort("newest")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              filters.sort === "newest"
+                ? "bg-blue-500 text-white"
+                : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+            }`}
+          >
+            Newest First
+          </button>
+        </div>
       </div>
 
       {/* Error Handling */}
       {error && (
-        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-red-300 mb-6">
-          {error}
-        </div>
-      )}
-
-      {/* Error Handling with Duplicate Suggestion Info */}
-      {error && (
-        <div className={`rounded-lg p-4 mb-6 ${
-          duplicateSuggestion 
-            ? "bg-yellow-900/20 border border-yellow-500/30 text-yellow-300"
-            : "bg-red-900/20 border border-red-500/30 text-red-300"
-        }`}>
+        <div
+          className={`rounded-lg p-4 mb-6 ${
+            duplicateSuggestion
+              ? "bg-yellow-900/20 border border-yellow-500/30 text-yellow-300"
+              : "bg-red-900/20 border border-red-500/30 text-red-300"
+          }`}
+        >
           <p>{error}</p>
           {duplicateSuggestion && (
             <div className="mt-2 text-sm">
-              <p>Original suggestion by User #{duplicateSuggestion.suggestedBy.slice(0, 8)}</p>
-              <p>Suggested on: {new Date(duplicateSuggestion.createdAt).toLocaleDateString()}</p>
+              <p>
+                Original suggestion by User #
+                {duplicateSuggestion.suggestedBy.slice(0, 8)}
+              </p>
+              <p>
+                Suggested on:{" "}
+                {new Date(duplicateSuggestion.createdAt).toLocaleDateString()}
+              </p>
             </div>
           )}
         </div>
@@ -296,8 +366,10 @@ useEffect(() => {
                     suggestion={suggestion}
                     onVote={handleVote}
                     onDelete={handleDelete}
+                    onStatusUpdate={handleStatusUpdate}
                     hasVoted={userVotes.has(suggestion.id)}
-                    canDelete={user?.role === "admin"}
+                    canDelete={isAdmin}
+                    isAdmin={isAdmin}
                     currentUserId={user?.id}
                   />
                 ))}

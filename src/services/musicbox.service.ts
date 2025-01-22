@@ -3,6 +3,7 @@ import {
   SuggestionFilters,
   SuggestionResponse,
   SuggestionsListResponse,
+  Suggestion,
 } from "@/types/suggestion.types";
 
 const apiClient = ApiClient.getInstance();
@@ -14,7 +15,10 @@ export const musicBoxService = {
     );
   },
 
-  async createSuggestion(data: { title: string; artist: string }): Promise<SuggestionResponse> {
+  async createSuggestion(data: {
+    title: string;
+    artist: string;
+  }): Promise<SuggestionResponse> {
     console.log("=== Starting createSuggestion ===");
     const token = localStorage.getItem("auth_token");
     if (!token) {
@@ -35,29 +39,30 @@ export const musicBoxService = {
         return {
           success: true,
           suggestion: response.suggestion,
-          message: "Suggestion created successfully"
+          message: "Suggestion created successfully",
         };
       }
 
       // Handle existing suggestion case
       if (response.existingSuggestion) {
-        console.log("3. Duplicate case - existing suggestion found:", response.existingSuggestion);
+        console.log(
+          "3. Duplicate case - existing suggestion found:",
+          response.existingSuggestion
+        );
         return {
           success: false,
           message: "This song has already been suggested.",
-          existingSuggestion: response.existingSuggestion
+          existingSuggestion: response.existingSuggestion,
         };
       }
 
-      // If we get here, something unexpected happened
       console.log("3. Unexpected response format:", response);
       throw new Error(response.message || "Failed to create suggestion");
-
     } catch (error) {
       console.error("4. Error in createSuggestion:", error);
-      throw error instanceof Error ? error : new Error("Failed to create suggestion");
-    } finally {
-      console.log("=== Ending createSuggestion ===");
+      throw error instanceof Error
+        ? error
+        : new Error("Failed to create suggestion");
     }
   },
 
@@ -81,6 +86,35 @@ export const musicBoxService = {
       return response;
     } catch (error) {
       console.error("Vote toggle error:", error);
+      throw error;
+    }
+  },
+
+  async updateSuggestionStatus(
+    suggestionId: string,
+    status: "approved" | "rejected"
+  ) {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      throw new Error("You must be logged in to update suggestion status");
+    }
+
+    try {
+      const response = await apiClient.put<{
+        success: boolean;
+        message: string;
+        suggestion: Suggestion;
+      }>(`/musicbox/suggestions/${suggestionId}/status`, { status });
+
+      if (!response.success) {
+        throw new Error(
+          response.message || "Failed to update suggestion status"
+        );
+      }
+
+      return response;
+    } catch (error) {
+      console.error("Status update error:", error);
       throw error;
     }
   },

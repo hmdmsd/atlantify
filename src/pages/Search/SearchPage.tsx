@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -7,49 +7,68 @@ import {
   PlayCircle,
   PauseCircle,
   Plus,
+  Heart,
+  ListPlus,
 } from "lucide-react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient, apiConfig } from "@/config/api.config";
+import { likedSongsService } from "@/services/liked-songs.service";
+import { playlistService } from "@/services/playlist.service";
 import { SongUploadModal } from "@/components/Modals/SongUploadModal";
-
-// Base Song interface
-interface BaseSong {
-  id: string;
-  title: string;
-  artist: string;
-  duration: number;
-  path: string;
-  publicUrl?: string;
-}
-
-// Extended Song interface with additional properties
-interface Song extends BaseSong {
-  size: number;
-  uploadedBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Track interface for player
-interface Track {
-  id: string;
-  title: string;
-  artist: string;
-  url: string;
-  duration: number;
-}
+import { Playlist } from "@/types/playlist.types";
+import { Song } from "@/types/song.types";
 
 export const SearchPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [results, setResults] = useState<Song[]>([]);
+  const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
+  const [userPlaylists, setUserPlaylists] = useState<Playlist[]>([]);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filter states
+  const [durationFilter, setDurationFilter] = useState<{
+    min: number;
+    max: number;
+  }>({ min: 0, max: 600 }); // 0-10 minutes default
 
   const { currentTrack, isPlaying, play, pause } = usePlayer();
+  const { isAuthenticated, isAdmin } = useAuth();
 
-  const { isAdmin } = useAuth();
+  // Load user's liked songs and playlists
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchLikedSongIds();
+      fetchUserPlaylists();
+    }
+  }, [isAuthenticated]);
+
+  const fetchLikedSongIds = async () => {
+    try {
+      const response = await likedSongsService.getLikedSongIds();
+      if (response.success) {
+        setLikedSongIds(new Set(response.songIds));
+      }
+    } catch (error) {
+      console.error("Error fetching liked songs:", error);
+    }
+  };
+
+  const fetchUserPlaylists = async () => {
+    try {
+      const response = await playlistService.getUserPlaylists();
+      if (response.success) {
+        setUserPlaylists(response.playlists);
+      }
+    } catch (error) {
+      console.error("Error fetching playlists:", error);
+    }
+  };
 
   const loadInitialSongs = useCallback(async () => {
     setIsLoading(true);
@@ -57,7 +76,7 @@ export const SearchPage: React.FC = () => {
       const response = await apiClient.get<{ success: boolean; songs: Song[] }>(
         apiConfig.endpoints.songs.list
       );
-      setResults(response.songs);
+      setAllSongs(response.songs);
     } catch (error) {
       console.error("Error loading songs:", error);
     } finally {
@@ -69,41 +88,80 @@ export const SearchPage: React.FC = () => {
     loadInitialSongs();
   }, [loadInitialSongs]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchTerm.trim()) {
-      loadInitialSongs();
+  // Advanced filtering logic
+  const filteredSongs = useMemo(() => {
+    return allSongs.filter((song) => {
+      // Search term filter (case-insensitive, matches title or artist)
+      const matchesSearch =
+        !searchTerm.trim() ||
+        song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        song.artist.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Duration filter
+      const matchesDuration =
+        song.duration >= durationFilter.min &&
+        song.duration <= durationFilter.max;
+
+      return matchesSearch && matchesDuration;
+    });
+  }, [allSongs, searchTerm, durationFilter]);
+
+  const handleToggleLike = async (song: Song) => {
+    if (!isAuthenticated) {
+      setError("Please log in to like songs");
       return;
     }
 
-    setIsLoading(true);
     try {
-      const response = await apiClient.get<{ success: boolean; songs: Song[] }>(
-        `${apiConfig.endpoints.songs.list}?search=${encodeURIComponent(
-          searchTerm
-        )}`
-      );
-      setResults(response.songs);
+      const response = await likedSongsService.toggleLikeSong(song.id);
+      if (response.success) {
+        setLikedSongIds((prev) => {
+          const newSet = new Set(prev);
+          if (response.liked) {
+            newSet.add(song.id);
+          } else {
+            newSet.delete(song.id);
+          }
+          return newSet;
+        });
+      }
     } catch (error) {
-      console.error("Error searching songs:", error);
-    } finally {
-      setIsLoading(false);
+      console.error("Error toggling like:", error);
+      setError("Failed to update like status");
     }
   };
 
-  const handleAddTrack = useCallback(async () => {
-    try {
-      await loadInitialSongs();
-      setShowUploadModal(false);
-    } catch (err) {
-      console.error("Failed to refresh tracks", err);
+  const handleAddToPlaylist = (song: Song) => {
+    if (!isAuthenticated) {
+      setError("Please log in to add songs to playlists");
+      return;
     }
-  }, [loadInitialSongs]);
+    setSelectedSong(song);
+    setShowPlaylistModal(true);
+  };
+
+  const handlePlaylistSelect = async (playlistId: string) => {
+    if (!selectedSong) return;
+
+    try {
+      const response = await playlistService.addSongToPlaylist(
+        playlistId,
+        selectedSong.id
+      );
+      if (response.success) {
+        setShowPlaylistModal(false);
+        setSelectedSong(null);
+      }
+    } catch (error) {
+      console.error("Error adding song to playlist:", error);
+      setError("Failed to add song to playlist");
+    }
+  };
 
   const handleTogglePlay = (song: Song) => {
     const trackUrl = song.publicUrl || song.path;
 
-    const trackData: Track = {
+    const trackData = {
       id: song.id,
       title: song.title,
       artist: song.artist,
@@ -149,49 +207,101 @@ export const SearchPage: React.FC = () => {
         )}
       </div>
 
-      <form onSubmit={handleSearch} className="relative">
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <div className="relative">
         <div className="flex">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search songs..."
-            className="w-full px-4 py-3 pl-10 pr-20 bg-neutral-900 border border-neutral-800 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className="px-4 bg-neutral-800 border-y border-neutral-800 text-neutral-400 hover:text-white transition-colors"
-          >
-            {showFilters ? (
-              <X className="w-5 h-5" />
-            ) : (
-              <Filter className="w-5 h-5" />
+          <div className="relative flex-grow">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search songs, artists..."
+              className="w-full px-4 py-3 pl-10 pr-20 bg-neutral-900 border border-neutral-800 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-neutral-500 text-sm"
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-5 h-5" />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             )}
-          </button>
+          </div>
           <button
-            type="submit"
-            className="px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-r-lg transition-colors"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-4 bg-neutral-800 border-y border-neutral-800 text-neutral-400 hover:text-white transition-colors ${
+              showFilters ? "bg-blue-600 text-white" : ""
+            }`}
           >
-            Search
+            <Filter className="w-5 h-5" />
           </button>
         </div>
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-5 h-5" />
-      </form>
+
+        {/* Advanced Filters */}
+        {showFilters && (
+          <div className="mt-4 bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-400 mb-2">
+                Song Duration
+              </label>
+              <div className="flex items-center space-x-4">
+                <select
+                  value={durationFilter.min}
+                  onChange={(e) =>
+                    setDurationFilter((prev) => ({
+                      ...prev,
+                      min: Number(e.target.value),
+                    }))
+                  }
+                  className="bg-neutral-800 text-white rounded px-2 py-1"
+                >
+                  <option value={0}>0 min</option>
+                  <option value={60}>1 min</option>
+                  <option value={120}>2 min</option>
+                  <option value={180}>3 min</option>
+                </select>
+                <span className="text-neutral-400">to</span>
+                <select
+                  value={durationFilter.max}
+                  onChange={(e) =>
+                    setDurationFilter((prev) => ({
+                      ...prev,
+                      max: Number(e.target.value),
+                    }))
+                  }
+                  className="bg-neutral-800 text-white rounded px-2 py-1"
+                >
+                  <option value={180}>3 min</option>
+                  <option value={300}>5 min</option>
+                  <option value={420}>7 min</option>
+                  <option value={600}>10 min</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="bg-neutral-900 rounded-xl border border-neutral-800">
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
           </div>
-        ) : results.length === 0 ? (
+        ) : filteredSongs.length === 0 ? (
           <div className="text-center py-12 text-neutral-500">
             <Music2 className="mx-auto h-12 w-12 mb-4 text-blue-500 opacity-50" />
             <p>No songs found.</p>
+            <p className="text-sm mt-2">Try adjusting your search or filters</p>
           </div>
         ) : (
           <div className="divide-y divide-neutral-800">
-            {results.map((song) => (
+            {filteredSongs.map((song) => (
               <div
                 key={song.id}
                 className="flex items-center p-4 hover:bg-neutral-800/50 transition-colors group"
@@ -215,26 +325,90 @@ export const SearchPage: React.FC = () => {
                   {formatDuration(song.duration)}
                 </div>
 
-                <button
-                  onClick={() => handleTogglePlay(song)}
-                  className="text-neutral-400 hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-blue-500/10"
-                >
-                  {isPlaying && currentTrack?.id === song.id ? (
-                    <PauseCircle className="w-8 h-8" />
-                  ) : (
-                    <PlayCircle className="w-8 h-8" />
+                {/* Action Buttons */}
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleTogglePlay(song)}
+                    className="text-neutral-400 hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-blue-500/10"
+                  >
+                    {isPlaying && currentTrack?.id === song.id ? (
+                      <PauseCircle className="w-8 h-8" />
+                    ) : (
+                      <PlayCircle className="w-8 h-8" />
+                    )}
+                  </button>
+
+                  {isAuthenticated && (
+                    <>
+                      <button
+                        onClick={() => handleToggleLike(song)}
+                        className={`p-2 rounded-full transition-colors ${
+                          likedSongIds.has(song.id)
+                            ? "text-red-500 hover:text-red-400"
+                            : "text-neutral-400 hover:text-red-500"
+                        }`}
+                      >
+                        <Heart
+                          className={`w-5 h-5 ${
+                            likedSongIds.has(song.id) ? "fill-current" : ""
+                          }`}
+                        />
+                      </button>
+
+                      <button
+                        onClick={() => handleAddToPlaylist(song)}
+                        className="p-2 rounded-full text-neutral-400 hover:text-blue-500 transition-colors"
+                      >
+                        <ListPlus className="w-5 h-5" />
+                      </button>
+                    </>
                   )}
-                </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
+      {/* Add to Playlist Modal */}
+      {showPlaylistModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-white mb-4">
+              Add to Playlist
+            </h2>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {userPlaylists.map((playlist) => (
+                <button
+                  key={playlist.id}
+                  onClick={() => handlePlaylistSelect(playlist.id)}
+                  className="w-full p-3 text-left rounded-lg hover:bg-neutral-800 transition-colors flex items-center justify-between"
+                >
+                  <span className="text-white">{playlist.name}</span>
+                  <Plus className="w-5 h-5 text-neutral-400" />
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => {
+                  setShowPlaylistModal(false);
+                  setSelectedSong(null);
+                }}
+                className="px-4 py-2 text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Modal */}
       {isAdmin && showUploadModal && (
         <SongUploadModal
           onClose={() => setShowUploadModal(false)}
-          onAddTrack={handleAddTrack}
+          onAddTrack={loadInitialSongs}
         />
       )}
     </div>

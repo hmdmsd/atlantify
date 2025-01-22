@@ -28,6 +28,7 @@ interface PlayerContextType {
   isRadioMode: boolean;
   requiresInteraction: boolean;
   play: (track: Track, radioMode?: boolean) => Promise<void>;
+  playMultiple: (tracks: Track[]) => Promise<void>;
   pause: () => void;
   togglePlay: () => void;
   seek: (time: number) => void;
@@ -254,6 +255,36 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [isRadioMode]
   );
+  const playMultiple = useCallback(
+    async (tracks: Track[]) => {
+      if (!tracks.length) return;
+
+      try {
+        setError(null);
+        setIsLoading(true);
+
+        // Clear the current queue
+        setQueue([]);
+
+        // Take the first track to play immediately
+        const [firstTrack, ...remainingTracks] = tracks;
+
+        // Add remaining tracks to the queue
+        if (remainingTracks.length > 0) {
+          setQueue(remainingTracks);
+        }
+
+        // Start playing the first track
+        await play(firstTrack, false);
+      } catch (error) {
+        console.error("Error playing multiple tracks:", error);
+        setError("Failed to start playlist playback. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [play]
+  );
 
   const clearQueue = useCallback(() => {
     if (!isRadioMode) {
@@ -286,6 +317,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         isRadioMode,
         requiresInteraction,
         play,
+        playMultiple, // Add the new function to the context
         pause,
         togglePlay,
         seek,
@@ -304,7 +336,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     </PlayerContext.Provider>
   );
 };
-
 export const usePlayer = () => {
   const context = useContext(PlayerContext);
   if (context === undefined) {

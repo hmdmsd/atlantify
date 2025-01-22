@@ -1,6 +1,10 @@
 export const apiConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api",
-  wsUrl: import.meta.env.VITE_WS_URL || "ws://localhost:4000/api",
+  baseUrl:
+    import.meta.env.VITE_API_BASE_URL ||
+    "https://atlantify-backend-production.up.railway.app/api",
+  wsUrl:
+    import.meta.env.VITE_WS_URL ||
+    "https://atlantify-backend-production.up.railway.app/api",
   endpoints: {
     auth: {
       login: "/auth/login",
@@ -13,6 +17,41 @@ export const apiConfig = {
       suggestions: "/musicbox/suggestions",
       vote: (id: string) => `/musicbox/suggestions/${id}/vote`,
       toggleVote: (id: string) => `/musicbox/suggestions/${id}/toggle-vote`,
+      getSuggestion: (id: string) => `/musicbox/suggestions/${id}`,
+      createSuggestion: "/musicbox/suggestions",
+      deleteSuggestion: (id: string) => `/musicbox/suggestions/${id}`,
+      updateStatus: (id: string) => `/musicbox/suggestions/${id}/status`,
+    },
+    playlists: {
+      list: "/playlists",
+      create: "/playlists",
+      details: (id: string) => `/playlists/${id}`,
+      update: (id: string) => `/playlists/${id}`,
+      delete: (id: string) => `/playlists/${id}`,
+      // Playlist songs management
+      addSong: (id: string) => `/playlists/${id}/songs`,
+      removeSong: (playlistId: string, songId: string) =>
+        `/playlists/${playlistId}/songs/${songId}`,
+      // Additional playlist functionality
+      getUserPlaylists: "/playlists",
+      updateCover: (id: string) => `/playlists/${id}/cover`,
+    },
+    likedSongs: {
+      list: "/liked-songs",
+      toggle: (songId: string) => `/liked-songs/${songId}/toggle`,
+      check: (songId: string) => `/liked-songs/${songId}/check`,
+      getLikedIds: "/liked-songs/ids",
+    },
+    stats: {
+      mostPlayed: "/stats/most-played",
+      recentlyPlayed: "/stats/recently-played",
+      songStats: (id: string) => `/stats/${id}`,
+      incrementPlay: (id: string) => `/stats/${id}/increment-play`,
+      // Additional stats endpoints
+      topCharts: "/stats/top-charts",
+      trending: "/stats/trending",
+      userHistory: "/stats/user-history",
+      globalStats: "/stats/global",
     },
     radio: {
       queue: "/radio/queue",

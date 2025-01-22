@@ -1,13 +1,18 @@
 import React from "react";
-import { ThumbsUp, Trash2, Clock, User } from "lucide-react";
+import { ThumbsUp, Trash2, Clock, User, Check, X } from "lucide-react";
 import { Suggestion } from "@/types/suggestion.types";
 
 interface SuggestionItemProps {
   suggestion: Suggestion;
   onVote: (suggestionId: string) => void;
   onDelete?: (suggestionId: string) => void;
+  onStatusUpdate?: (
+    suggestionId: string,
+    status: "approved" | "rejected"
+  ) => void;
   hasVoted: boolean;
   canDelete?: boolean;
+  isAdmin?: boolean;
   currentUserId?: string;
 }
 
@@ -15,8 +20,10 @@ export const SuggestionItem: React.FC<SuggestionItemProps> = ({
   suggestion,
   onVote,
   onDelete,
+  onStatusUpdate,
   hasVoted,
   canDelete = false,
+  isAdmin = false,
   currentUserId,
 }) => {
   const formatDate = (dateString: string) => {
@@ -32,6 +39,20 @@ export const SuggestionItem: React.FC<SuggestionItemProps> = ({
     if (onDelete) {
       if (window.confirm("Are you sure you want to delete this suggestion?")) {
         onDelete(suggestion.id);
+      }
+    }
+  };
+
+  const handleStatusUpdate = (
+    e: React.MouseEvent,
+    status: "approved" | "rejected"
+  ) => {
+    e.stopPropagation();
+    if (onStatusUpdate) {
+      if (
+        window.confirm(`Are you sure you want to ${status} this suggestion?`)
+      ) {
+        onStatusUpdate(suggestion.id, status);
       }
     }
   };
@@ -61,8 +82,27 @@ export const SuggestionItem: React.FC<SuggestionItemProps> = ({
                 hasVoted ? "fill-current transform scale-110" : ""
               }`}
             />
-            <span className="font-medium">{suggestion.votes}</span>
+            <span className="font-medium">{suggestion.voteCount}</span>
           </button>
+
+          {isAdmin && suggestion.status === "pending" && (
+            <>
+              <button
+                onClick={(e) => handleStatusUpdate(e, "approved")}
+                className="p-2 text-neutral-400 hover:text-green-500 rounded-md hover:bg-green-500/10 transition-all duration-200"
+                title="Approve suggestion"
+              >
+                <Check className="h-5 w-5" />
+              </button>
+              <button
+                onClick={(e) => handleStatusUpdate(e, "rejected")}
+                className="p-2 text-neutral-400 hover:text-red-500 rounded-md hover:bg-red-500/10 transition-all duration-200"
+                title="Reject suggestion"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </>
+          )}
 
           {(canDelete || suggestion.suggestedBy === currentUserId) && (
             <button

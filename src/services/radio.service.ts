@@ -52,7 +52,9 @@ class RadioService extends EventEmitter {
   }
 
   private setupWebSocket(): void {
-    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:4000";
+    const wsUrl =
+      import.meta.env.VITE_WS_URL ||
+      "https://atlantify-backend-production.up.railway.app";
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onmessage = (event) => {
