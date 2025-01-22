@@ -20,6 +20,7 @@ interface Song {
   path: string;
   duration: number;
   publicUrl?: string;
+  views: number;
 }
 
 interface SongsContextType {
@@ -55,25 +56,35 @@ export const SongsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const playSong = async (song: Song) => {
     try {
-      // First get the song details to get the latest publicUrl
-      const response = await apiClient.get<{ success: boolean; song: Song }>(
+      // First increment the song views
+          const response = await apiClient.put<{ success: boolean }>(
+      apiConfig.endpoints.songs.incrementViews(song.id),
+      {}
+    );
+      
+      if (!response.success) {
+        throw new Error('Failed to increment views');
+      }
+  
+      // Then get the song details to get the latest publicUrl
+      const detailsResponse = await apiClient.get<{ success: boolean; song: Song }>(
         apiConfig.endpoints.songs.details(song.id)
       );
-
-      const songDetails = response.song;
-
+  
+      const songDetails = detailsResponse.song;
+  
       // Get the auth token
       const token = localStorage.getItem("auth_token");
       if (!token) {
         throw new Error("Authentication required");
       }
-
+  
       // Use the public URL from the song details
       const audioUrl = songDetails.publicUrl;
       if (!audioUrl) {
         throw new Error("No audio URL available");
       }
-
+  
       await audioService.loadTrack({
         id: song.id,
         title: song.title,
@@ -84,17 +95,11 @@ export const SongsProvider: React.FC<{ children: React.ReactNode }> = ({
           Authorization: `Bearer ${token}`,
         },
       } as AudioTrack);
-
-      await audioService.play();
-      setCurrentSong(song);
-      setIsPlaying(true);
-      setPlayingSongId(song.id);
     } catch (error) {
-      console.error("Error playing song:", error);
-      setIsPlaying(false);
-      setPlayingSongId(null);
+      console.error('Error playing song:', error);
     }
   };
+  
 
   const pauseSong = () => {
     audioService.pause();

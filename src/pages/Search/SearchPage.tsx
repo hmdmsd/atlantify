@@ -21,6 +21,7 @@ interface BaseSong {
   duration: number;
   path: string;
   publicUrl?: string;
+  views: number;
 }
 
 // Extended Song interface with additional properties
@@ -38,6 +39,7 @@ interface Track {
   artist: string;
   url: string;
   duration: number;
+  views: number;
 }
 
 export const SearchPage: React.FC = () => {
@@ -109,8 +111,11 @@ export const SearchPage: React.FC = () => {
       artist: song.artist,
       url: trackUrl,
       duration: song.duration,
+      views: song.views,
     };
 
+     
+     
     if (currentTrack?.id === song.id) {
       if (isPlaying) {
         pause();
@@ -119,6 +124,14 @@ export const SearchPage: React.FC = () => {
       }
     } else {
       play(trackData);
+      const incrementViewsUrl = `/songs/${song.id}`;
+      // Appel PUT avec l'ID de la chanson et les nouvelles vues
+      apiClient.put(incrementViewsUrl, { views: song.views + 1 });
+      setResults((prevResults) =>
+        prevResults.map((item) =>
+          item.id === song.id ? { ...item, views: item.views + 1 } : item
+        )
+      );
     }
   };
 
@@ -208,6 +221,10 @@ export const SearchPage: React.FC = () => {
                   </h3>
                   <p className="text-sm text-neutral-400 truncate">
                     {song.artist}
+                  </p>
+                  <p className="text-sm text-neutral-400 truncate">
+                    views: 
+                    {song.views}
                   </p>
                 </div>
 

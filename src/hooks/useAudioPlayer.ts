@@ -7,7 +7,9 @@ interface Track {
   artist: string;
   url: string;
   duration: number;
+  views: number;
 }
+
 
 export const useAudioPlayer = () => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);

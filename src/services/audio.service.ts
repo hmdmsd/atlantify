@@ -6,6 +6,7 @@ interface AudioTrack {
   artist: string;
   url: string;
   duration?: number;
+  views?: number;
 }
 
 interface AudioState {

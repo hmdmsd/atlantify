@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Music2,
   Play,
+  PlayCircle,
 } from "lucide-react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useRadioQueue } from "@/hooks/useRadioQueue";
@@ -46,10 +47,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
 
   // Determine the current track (prioritize radio track if radio is active)
   const currentTrack = isRadioActive ? radioTrack : playerTrack;
-
   // Determine skip action based on mode
   const handleSkip = isRadioActive ? radioSkipTrack : playerNext;
-
   const handlePlayClick = () => {
     if (requiresInteraction) {
       handleUserInteraction();
@@ -85,6 +84,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
               </h3>
               <p className="text-sm text-neutral-400 truncate">
                 {currentTrack.artist}
+                {currentTrack.views}
               </p>
               {/* Radio Mode Indicator */}
               {isRadioActive && (
@@ -92,6 +92,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
                   Live Radio
                 </span>
               )}
+
+              {/* Views Counter */}
+              <div className="flex items-center gap-1 mt-1">
+                <PlayCircle className="w-3 h-3 text-neutral-500" />
+                <span className="text-xs text-neutral-500">
+               
+                </span>
+              </div>
+
               {error && !requiresInteraction && (
                 <div className="flex items-center gap-2 text-red-500 text-sm mt-1">
                   <AlertCircle className="w-4 h-4" />
@@ -110,11 +119,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
                 disabled={isRadioMode}
                 className={`
                   text-neutral-400 transition-colors p-2 rounded-full
-                  ${
-                    isRadioMode
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:text-white hover:bg-neutral-800"
-                  }
+                  ${isRadioMode ? "opacity-50 cursor-not-allowed" : "hover:text-white hover:bg-neutral-800"}
                 `}
               >
                 <SkipBack className="w-5 h-5" />
@@ -125,10 +130,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
                 disabled={isLoading || (isRadioActive && !requiresInteraction)}
                 className={`
                   w-10 h-10 flex items-center justify-center rounded-full 
-                  ${
-                    isRadioActive && !requiresInteraction
-                      ? "bg-neutral-700 text-neutral-400 cursor-not-allowed"
-                      : "bg-white text-black hover:bg-neutral-200"
+                  ${isRadioActive && !requiresInteraction
+                    ? "bg-neutral-700 text-neutral-400 cursor-not-allowed"
+                    : "bg-white text-black hover:bg-neutral-200"
                   }
                   transition-colors disabled:opacity-50
                 `}
@@ -147,10 +151,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = () => {
                 disabled={!isAdmin && isRadioMode}
                 className={`
                   text-neutral-400 transition-colors p-2 rounded-full
-                  ${
-                    !isAdmin && isRadioMode
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:text-white hover:bg-neutral-800"
+                  ${!isAdmin && isRadioMode
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:text-white hover:bg-neutral-800"
                   }
                 `}
               >

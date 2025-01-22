@@ -27,6 +27,9 @@ export const apiConfig = {
       list: "/songs",
       details: (id: string) => `/songs/${id}`,
       stream: (id: string) => `/songs/stream/${id}`,
+      incrementViews: (id: string) => `/songs/views/${id}`,
+      start: (id:string) => `/songs/start/${id}`,
+
     },
     profile: {
       base: "/profile",
