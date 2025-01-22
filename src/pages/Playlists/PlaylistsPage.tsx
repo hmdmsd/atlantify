@@ -99,13 +99,30 @@ export const PlaylistsPage: React.FC = () => {
         setPlaylists((prev) => [...prev, response.playlist]);
         setShowCreateModal(false);
       } else {
+        // Handle specific error cases
+        if (response.message === "User not found") {
+          setError("Please log in again to create a playlist");
+          // Optionally force re-authentication
+          // logout(); // If you have a logout function
+          return;
+        }
         setError(response.message || "Failed to create playlist");
       }
     } catch (err) {
       console.error("Create playlist error:", err);
-      setError(
-        err instanceof Error ? err.message : "An unexpected error occurred"
-      );
+      if (err instanceof Error) {
+        if (
+          err.message === "Authentication required" ||
+          err.message === "Please log in again to create a playlist"
+        ) {
+          setError("Please log in again to create a playlist");
+          // Optionally force re-authentication
+          return;
+        }
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred");
+      }
     }
   };
 

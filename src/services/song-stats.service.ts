@@ -43,40 +43,79 @@ export const songStatsService = {
     return response;
   },
 
-  async getTopCharts() {
-    const response = await apiClient.get<{
-      success: boolean;
-      songs: Song[];
-    }>(apiConfig.endpoints.stats.topCharts);
-    return response;
-  },
-
   async getTrendingSongs() {
-    const response = await apiClient.get<{
-      success: boolean;
-      songs: Song[];
-    }>(apiConfig.endpoints.stats.trending);
-    return response;
-  },
-
-  async getUserHistory() {
-    const response = await apiClient.get<{
-      success: boolean;
-      songs: Song[];
-    }>(apiConfig.endpoints.stats.userHistory);
-    return response;
+    try {
+      const response = await apiClient.get<{
+        success: boolean;
+        songs: Song[];
+      }>(apiConfig.endpoints.stats.trending);
+      return response;
+    } catch (error) {
+      console.error("Error fetching trending songs:", error);
+      // Return empty success response instead of throwing
+      return {
+        success: true,
+        songs: [],
+      };
+    }
   },
 
   async getGlobalStats() {
-    const response = await apiClient.get<{
-      success: boolean;
-      stats: {
-        totalPlays: number;
-        uniqueListeners: number;
-        topGenres: { name: string; count: number }[];
-        topArtists: { name: string; plays: number }[];
+    try {
+      const response = await apiClient.get<{
+        success: boolean;
+        stats: {
+          totalPlays: number;
+          uniqueListeners: number;
+          topGenres: { name: string; count: number }[];
+          topArtists: { name: string; plays: number }[];
+        };
+      }>(apiConfig.endpoints.stats.globalStats);
+      return response;
+    } catch (error) {
+      console.error("Error fetching global stats:", error);
+      // Return default stats instead of throwing
+      return {
+        success: true,
+        stats: {
+          totalPlays: 0,
+          uniqueListeners: 0,
+          topGenres: [],
+          topArtists: [],
+        },
       };
-    }>(apiConfig.endpoints.stats.globalStats);
-    return response;
+    }
+  },
+
+  async getUserHistory() {
+    try {
+      const response = await apiClient.get<{
+        success: boolean;
+        songs: Song[];
+      }>(apiConfig.endpoints.stats.userHistory);
+      return response;
+    } catch (error) {
+      console.error("Error fetching user history:", error);
+      return {
+        success: true,
+        songs: [],
+      };
+    }
+  },
+
+  async getTopCharts() {
+    try {
+      const response = await apiClient.get<{
+        success: boolean;
+        songs: Song[];
+      }>(apiConfig.endpoints.stats.topCharts);
+      return response;
+    } catch (error) {
+      console.error("Error fetching top charts:", error);
+      return {
+        success: true,
+        songs: [],
+      };
+    }
   },
 };

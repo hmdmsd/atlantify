@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ListMusic, Play, Trash2, Search } from "lucide-react";
+import { ListMusic, Play, Pause, Trash2, Music2 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { playlistService } from "@/services/playlist.service";
 import { usePlayer } from "@/contexts/PlayerContext";
@@ -7,16 +7,16 @@ import { AddSongsModal } from "@/components/Playlists/AddSongsModal";
 import { Playlist, PlaylistSong } from "@/types/playlist.types";
 import { Song } from "@/types/song.types";
 import { apiClient, apiConfig } from "@/config/api.config";
+import { songStatsService } from "@/services/song-stats.service";
 
 export const PlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playMultiple } = usePlayer();
+  const { currentTrack, isPlaying, play, pause, playMultiple } = usePlayer();
 
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
   const [showAddSongsModal, setShowAddSongsModal] = useState(false);
   const [availableSongs, setAvailableSongs] = useState<Song[]>([]);
 
@@ -42,18 +42,67 @@ export const PlaylistPage: React.FC = () => {
     }
   };
 
-  const handlePlayPlaylist = () => {
-    if (!playlist?.songs?.length) return;
+  const getTrackData = (playlistSong: PlaylistSong) => {
+    if (!playlistSong.song) return null;
+    const song = playlistSong.song;
 
-    const tracks = playlist.songs.map((song) => ({
-      id: song.song!.id,
-      title: song.song!.title,
-      artist: song.song!.artist,
-      url: song.song!.publicUrl || song.song!.path,
-      duration: song.song!.duration,
-    }));
+    // Ensure we have a valid URL
+    const url = song.publicUrl || song.path;
+    if (!url) return null;
 
-    playMultiple(tracks);
+    return {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      url: url,
+      duration: song.duration,
+    };
+  };
+
+  const handlePlayAll = () => {
+    if (!playlist || !playlist.songs || playlist.songs.length === 0) return;
+
+    const tracks = playlist.songs
+      .filter(
+        (
+          playlistSong
+        ): playlistSong is PlaylistSong & {
+          song: NonNullable<PlaylistSong["song"]>;
+        } =>
+          !!playlistSong.song &&
+          (!!playlistSong.song.path || !!playlistSong.song.publicUrl)
+      )
+      .map((playlistSong) => ({
+        id: playlistSong.song.id,
+        title: playlistSong.song.title,
+        artist: playlistSong.song.artist,
+        duration: playlistSong.song.duration,
+        url: playlistSong.song.publicUrl || playlistSong.song.path,
+      }));
+
+    if (tracks.length > 0) {
+      playMultiple(tracks);
+    }
+  };
+  const handleTogglePlay = async (playlistSong: PlaylistSong) => {
+    const trackData = getTrackData(playlistSong);
+    if (!trackData) return;
+
+    try {
+      if (currentTrack?.id === trackData.id) {
+        if (isPlaying) {
+          pause();
+        } else {
+          await play(trackData);
+        }
+      } else {
+        await play(trackData);
+        await songStatsService.incrementPlayCount(trackData.id);
+      }
+    } catch (err) {
+      console.error("Error handling playback:", err);
+      setError("Failed to play the track. Please try again.");
+    }
   };
 
   const handleRemoveSong = async (songId: string) => {
@@ -75,7 +124,6 @@ export const PlaylistPage: React.FC = () => {
       );
 
       if (response.success) {
-        // Exclude songs already in the playlist
         const playlistSongIds = new Set(
           playlist?.songs?.map((s) => s.songId) || []
         );
@@ -128,22 +176,10 @@ export const PlaylistPage: React.FC = () => {
   };
 
   const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return hours > 0 ? `${hours} hr ${minutes} min` : `${minutes} min`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
-
-  const getTotalDuration = (songs: PlaylistSong[]) => {
-    return songs.reduce((total, song) => total + (song.song?.duration || 0), 0);
-  };
-
-  const filteredSongs = playlist?.songs?.filter(
-    (playlistSong) =>
-      playlistSong.song?.title
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      playlistSong.song?.artist.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (isLoading) {
     return (
@@ -171,9 +207,11 @@ export const PlaylistPage: React.FC = () => {
     return null;
   }
 
+  const songCount = playlist.songs?.length ?? 0;
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Playlist Header */}
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* Header section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           {playlist.coverImage ? (
@@ -193,90 +231,108 @@ export const PlaylistPage: React.FC = () => {
               <p className="text-neutral-400 mt-1">{playlist.description}</p>
             )}
             <div className="text-neutral-500 text-sm mt-2">
-              {playlist.songs?.length || 0} songs •{" "}
-              {formatDuration(getTotalDuration(playlist.songs || []))}
+              {songCount} songs
             </div>
           </div>
         </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={handlePlayPlaylist}
-            disabled={!playlist.songs?.length}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full disabled:opacity-50"
-          >
-            <Play className="w-5 h-5" />
-            Play All
-          </button>
+
+        <div className="flex items-center space-x-4">
+          {songCount > 0 && (
+            <>
+              <span className="text-neutral-400">{songCount} songs</span>
+              <button
+                onClick={handlePlayAll}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors"
+              >
+                Play All
+              </button>
+            </>
+          )}
           <button
             onClick={handleAddSongs}
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-full"
+            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-full"
           >
             Add Songs
           </button>
-          <div className="dropdown">
-            <button
-              onClick={handleDeletePlaylist}
-              className="p-2 hover:bg-neutral-800 rounded-full text-neutral-400 hover:text-red-500"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={handleDeletePlaylist}
+            className="p-2 hover:bg-neutral-800 rounded-full text-neutral-400 hover:text-red-500"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search songs in playlist..."
-          className="w-full px-4 py-2 pl-10 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500"
-        />
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 w-4 h-4" />
-      </div>
-
       {/* Songs List */}
-      <div className="space-y-2">
-        {filteredSongs?.length === 0 ? (
-          <div className="text-center text-neutral-400 py-8">
-            No songs in this playlist
+      <div className="bg-neutral-900 rounded-xl border border-neutral-800">
+        {!songCount ? (
+          <div className="text-center py-12 text-neutral-500">
+            <ListMusic className="mx-auto h-12 w-12 mb-4 text-blue-500 opacity-50" />
+            <p>No songs in this playlist</p>
           </div>
         ) : (
-          filteredSongs?.map((playlistSong, index) => (
-            <div
-              key={playlistSong.id}
-              className="flex items-center justify-between p-3 hover:bg-neutral-800 rounded-lg"
-            >
-              <div className="flex items-center space-x-4">
-                <span className="text-neutral-500 w-8">{index + 1}</span>
-                <div>
-                  <p className="text-white">{playlistSong.song?.title}</p>
-                  <p className="text-neutral-400 text-sm">
+          <div className="divide-y divide-neutral-800">
+            {playlist.songs?.map((playlistSong) => (
+              <div
+                key={playlistSong.id}
+                className="flex items-center p-4 hover:bg-neutral-800/50 transition-colors group"
+              >
+                {/* Album Art */}
+                <div className="mr-4">
+                  <div className="w-12 h-12 bg-neutral-700 rounded flex items-center justify-center text-neutral-400">
+                    <Music2 className="w-6 h-6" />
+                  </div>
+                </div>
+
+                {/* Song Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-white truncate">
+                    {playlistSong.song?.title}
+                  </h3>
+                  <p className="text-sm text-neutral-400 truncate">
                     {playlistSong.song?.artist}
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-neutral-500">
+
+                {/* Duration */}
+                <div className="text-neutral-400 text-sm mr-4">
                   {formatDuration(playlistSong.song?.duration || 0)}
-                </span>
-                <button
-                  onClick={() => handleRemoveSong(playlistSong.songId)}
-                  className="text-neutral-400 hover:text-red-500"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleTogglePlay(playlistSong)}
+                    className="text-neutral-400 hover:text-blue-500 transition-colors"
+                    title={
+                      currentTrack?.id === playlistSong.song?.id && isPlaying
+                        ? "Pause"
+                        : "Play"
+                    }
+                  >
+                    {currentTrack?.id === playlistSong.song?.id && isPlaying ? (
+                      <Pause className="w-5 h-5" />
+                    ) : (
+                      <Play className="w-5 h-5" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleRemoveSong(playlistSong.songId)}
+                    className="text-neutral-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
       {/* Add Songs Modal */}
       <AddSongsModal
         isOpen={showAddSongsModal}
-        playlistId={id || ""} // Pass the playlist ID
+        playlistId={id || ""}
         availableSongs={availableSongs}
         onClose={() => setShowAddSongsModal(false)}
         onAddSongs={handleAddSelectedSongs}

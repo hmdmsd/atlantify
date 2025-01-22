@@ -1,358 +1,332 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Music2,
   Radio,
-  Plus,
-  Play,
-  Pause,
+  Heart,
+  ListMusic,
+  User,
   Clock,
-  Headphones,
-  TrendingUp,
-  Disc3,
+  Upload,
+  Play,
+  Plus,
 } from "lucide-react";
 
-// Import services
-import { songStatsService } from "@/services/song-stats.service";
+// Import services and hooks
+import { playlistService } from "@/services/playlist.service";
+import { likedSongsService } from "@/services/liked-songs.service";
 import { useAuth } from "@/hooks/useAuth";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
-import { Song } from "@/types/song.types";
+import { useRadioQueue } from "@/hooks/useRadioQueue";
+
+// Import types
+import type { Song } from "@/types/song.types";
+import type { Playlist } from "@/types/playlist.types";
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
 
 export const HomePage: React.FC = () => {
-  const { user } = useAuth();
-  const { currentTrack, play, isPlaying, togglePlay } = useAudioPlayer();
+  const { user, isAuthenticated } = useAuth();
+  const { isRadioActive, listeners } = useRadioQueue();
 
-  // State for various data
-  const [recentlyPlayed, setRecentlyPlayed] = useState<Song[]>([]);
-  const [recommendedTracks, setRecommendedTracks] = useState<Song[]>([]);
-  const [globalStats, setGlobalStats] = useState<{
-    totalPlays: number;
-    uniqueListeners: number;
-    topGenres: { name: string; count: number }[];
-  }>({
-    totalPlays: 0,
-    uniqueListeners: 0,
-    topGenres: [],
-  });
-
-  const [isLoading, setIsLoading] = useState(true);
+  // State
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [likedSongs, setLikedSongs] = useState<Song[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchHomePageData = async () => {
+    const fetchHomeData = async () => {
+      if (!isAuthenticated) return;
+
       try {
-        // Fetch recently played tracks
-        const recentResponse = await songStatsService.getRecentlyPlayed(5);
-        if (recentResponse.success) {
-          setRecentlyPlayed(recentResponse.songs);
+        setError(null);
+
+        // Fetch user's playlists
+        try {
+          const playlistsResponse = await playlistService.getUserPlaylists();
+          if (playlistsResponse.success) {
+            setPlaylists(playlistsResponse.playlists);
+          }
+        } catch (err) {
+          console.error("Failed to fetch playlists:", err);
         }
 
-        // Fetch recommended/trending tracks
-        const trendingResponse = await songStatsService.getTrendingSongs();
-        if (trendingResponse.success) {
-          setRecommendedTracks(trendingResponse.songs);
-        }
-
-        // Fetch global stats
-        const globalStatsResponse = await songStatsService.getGlobalStats();
-        if (globalStatsResponse.success) {
-          setGlobalStats(globalStatsResponse.stats);
+        // Fetch liked songs
+        try {
+          const likedResponse = await likedSongsService.getLikedSongs();
+          if (likedResponse.success) {
+            setLikedSongs(likedResponse.songs);
+          }
+        } catch (err) {
+          console.error("Failed to fetch liked songs:", err);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    fetchHomePageData();
-  }, []);
+    fetchHomeData();
+  }, [isAuthenticated]);
 
-  const formatDuration = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-  };
-
-  if (isLoading) {
+  if (!isAuthenticated) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
+        <Music2 className="w-16 h-16 text-blue-500 mb-4" />
+        <h1 className="text-3xl font-bold text-white mb-2">
+          Welcome to Atlantify
+        </h1>
+        <p className="text-neutral-400 mb-8">
+          Please log in to access your music library
+        </p>
+        <Link
+          to="/auth/login"
+          className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-colors"
+        >
+          Log In
+        </Link>
       </div>
     );
   }
 
-  const quickActions = [
-    {
-      title: "Radio Station",
-      description: "Discover new music",
-      icon: <Radio className="h-8 w-8" />,
-      bgColor: "bg-blue-500/10",
-      textColor: "text-blue-500",
-      borderColor: "border-blue-500/20",
-    },
-    {
-      title: "Music Box",
-      description: "Collaborative Playlist",
-      icon: <Music2 className="h-8 w-8" />,
-      bgColor: "bg-purple-500/10",
-      textColor: "text-purple-500",
-      borderColor: "border-purple-500/20",
-    },
-    {
-      title: "Upload Music",
-      description: "Add new tracks",
-      icon: <Plus className="h-8 w-8" />,
-      bgColor: "bg-green-500/10",
-      textColor: "text-green-500",
-      borderColor: "border-green-500/20",
-    },
-  ];
-
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <motion.div
+      className="p-6 space-y-8 max-w-7xl mx-auto"
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+    >
       {/* Welcome Section */}
-      <div>
-        <h1 className="text-4xl font-bold text-white mb-4">
-          Good evening, {user?.username || "Music Lover"}
+      <motion.div className="space-y-2" variants={itemVariants}>
+        <h1 className="text-4xl font-bold text-white flex items-center gap-3">
+          Welcome back, {user?.username || "Music Lover"}
         </h1>
         <p className="text-neutral-400 text-lg">
-          Discover new music, explore your favorites, and keep the rhythm going.
+          {new Date().getHours() < 12
+            ? "Good morning"
+            : new Date().getHours() < 18
+            ? "Good afternoon"
+            : "Good evening"}
+          ! Ready to discover some great music?
         </p>
-      </div>
+      </motion.div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {quickActions.map((action) => (
-          <div
-            key={action.title}
-            className={`${action.bgColor} ${action.textColor} rounded-xl p-6 border ${action.borderColor} hover:bg-opacity-20 transition-colors cursor-pointer group`}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold group-hover:text-white transition-colors">
-                  {action.title}
-                </h3>
-                <p className="opacity-80 group-hover:opacity-100 transition-opacity">
-                  {action.description}
-                </p>
-              </div>
-              {React.cloneElement(action.icon, {
-                className: `${action.icon.props.className} group-hover:scale-110 transition-transform`,
-              })}
+      {/* Quick Access Grid */}
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        variants={containerVariants}
+      >
+        <Link
+          to="/radio"
+          className="bg-[#1a1f37] hover:bg-[#1e2442] p-6 rounded-xl border border-blue-500/20 hover:border-blue-500/40 transition-all group"
+        >
+          <div className="flex items-center gap-4">
+            <Radio className="w-8 h-8 text-blue-500" />
+            <div>
+              <h3 className="font-semibold text-white">Radio Station</h3>
+              <p className="text-sm text-neutral-400">
+                {isRadioActive ? `${listeners} listening` : "Join live radio"}
+              </p>
             </div>
           </div>
-        ))}
-      </div>
+        </Link>
 
-      {/* Recommended & Recently Played Sections */}
+        <Link
+          to="/music-box"
+          className="bg-[#2a1a37] hover:bg-[#321e42] p-6 rounded-xl border border-purple-500/20 hover:border-purple-500/40 transition-all group"
+        >
+          <div className="flex items-center gap-4">
+            <Music2 className="w-8 h-8 text-purple-500" />
+            <div>
+              <h3 className="font-semibold text-white">Music Box</h3>
+              <p className="text-sm text-neutral-400">Suggest songs</p>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          to="/liked"
+          className="bg-[#371a1a] hover:bg-[#421e1e] p-6 rounded-xl border border-red-500/20 hover:border-red-500/40 transition-all group"
+        >
+          <div className="flex items-center gap-4">
+            <Heart className="w-8 h-8 text-red-500" />
+            <div>
+              <h3 className="font-semibold text-white">Liked Songs</h3>
+              <p className="text-sm text-neutral-400">
+                {likedSongs.length} songs
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          to="/playlists"
+          className="bg-[#1a371f] hover:bg-[#1e4223] p-6 rounded-xl border border-green-500/20 hover:border-green-500/40 transition-all group"
+        >
+          <div className="flex items-center gap-4">
+            <ListMusic className="w-8 h-8 text-green-500" />
+            <div>
+              <h3 className="font-semibold text-white">Playlists</h3>
+              <p className="text-sm text-neutral-400">
+                {playlists.length} playlists
+              </p>
+            </div>
+          </div>
+        </Link>
+      </motion.div>
+
+      {/* Content Grid */}
       <div className="grid md:grid-cols-2 gap-8">
-        {/* Recently Played Section */}
-        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800">
-          <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <Clock className="w-6 h-6 text-blue-500" />
-              Recently Played
-            </h2>
-            <button className="text-neutral-400 hover:text-blue-500 transition-colors text-sm">
-              See All
-            </button>
-          </div>
-
-          {error ? (
-            <div className="p-6 text-red-400">{error}</div>
-          ) : (
-            <div className="divide-y divide-neutral-800">
-              {recentlyPlayed.length === 0 ? (
-                <div className="p-8 text-center text-neutral-500">
-                  No recently played tracks. Start listening!
-                </div>
-              ) : (
-                recentlyPlayed.map((song) => (
-                  <div
-                    key={song.id}
-                    className="flex items-center p-4 hover:bg-neutral-800/50 transition-colors group"
-                  >
-                    <button
-                      onClick={() =>
-                        currentTrack?.id === song.id
-                          ? togglePlay()
-                          : play({
-                              id: song.id,
-                              title: song.title,
-                              artist: song.artist,
-                              url: song.path,
-                              duration: song.duration,
-                            })
-                      }
-                      className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
-                    >
-                      {currentTrack?.id === song.id && isPlaying ? (
-                        <Pause className="h-5 w-5" />
-                      ) : (
-                        <Play className="h-5 w-5" />
-                      )}
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-white truncate">
-                        {song.title}
-                      </h3>
-                      <p className="text-sm text-neutral-400 truncate">
-                        {song.artist}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm text-neutral-500">
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {formatDuration(song.duration)}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
+        {/* Playlists Overview */}
+        <motion.div variants={itemVariants}>
+          <div className="bg-neutral-900/50 rounded-xl border border-neutral-800">
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <ListMusic className="w-6 h-6 text-green-500" />
+                Your Playlists
+              </h2>
+              <Link
+                to="/playlists/create"
+                className="text-neutral-400 hover:text-green-500 transition-colors text-sm flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Create New
+              </Link>
             </div>
-          )}
-        </div>
 
-        {/* Recommended Tracks Section */}
-        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800">
-          <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <TrendingUp className="w-6 h-6 text-blue-500" />
-              Recommended for You
-            </h2>
-            <button className="text-neutral-400 hover:text-blue-500 transition-colors text-sm">
-              See All
-            </button>
-          </div>
-
-          <div className="divide-y divide-neutral-800">
-            {recommendedTracks.length === 0 ? (
-              <div className="p-8 text-center text-neutral-500">
-                No recommendations available.
-              </div>
-            ) : (
-              recommendedTracks.map((song) => (
-                <div
-                  key={song.id}
+            <div className="divide-y divide-neutral-800">
+              {playlists.slice(0, 4).map((playlist) => (
+                <Link
+                  key={playlist.id}
+                  to={`/playlists/${playlist.id}`}
                   className="flex items-center p-4 hover:bg-neutral-800/50 transition-colors group"
                 >
-                  <button
-                    onClick={() =>
-                      currentTrack?.id === song.id
-                        ? togglePlay()
-                        : play({
-                            id: song.id,
-                            title: song.title,
-                            artist: song.artist,
-                            url: song.path,
-                            duration: song.duration,
-                          })
-                    }
-                    className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-blue-500 hover:bg-neutral-700 mr-4 transition-colors"
-                  >
-                    <Play className="h-5 w-5" />
-                  </button>
+                  <div className="w-10 h-10 bg-neutral-800 rounded flex items-center justify-center mr-4">
+                    {playlist.coverImage ? (
+                      <img
+                        src={playlist.coverImage}
+                        alt={playlist.name}
+                        className="w-full h-full object-cover rounded"
+                      />
+                    ) : (
+                      <ListMusic className="w-5 h-5 text-neutral-400" />
+                    )}
+                  </div>
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-white truncate">
-                      {song.title}
+                    <h3 className="font-medium text-white truncate group-hover:text-green-500 transition-colors">
+                      {playlist.name}
                     </h3>
                     <p className="text-sm text-neutral-400 truncate">
-                      {song.artist}
+                      {playlist.songs?.length || 0} songs
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-4 text-sm text-neutral-500">
-                    <div className="flex items-center">
-                      <Disc3 className="h-4 w-4 mr-1" />
-                      {formatDuration(song.duration)}
-                    </div>
-                  </div>
+                  <Play className="w-5 h-5 text-neutral-400 group-hover:text-green-500 opacity-0 group-hover:opacity-100 transition-all" />
+                </Link>
+              ))}
+
+              {playlists.length === 0 && (
+                <div className="p-8 text-center text-neutral-500">
+                  <ListMusic className="w-12 h-12 mx-auto mb-4 text-green-500 opacity-50" />
+                  <p>No playlists yet</p>
+                  <Link
+                    to="/playlists/create"
+                    className="text-sm mt-2 text-green-500 hover:text-green-400 transition-colors inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create your first playlist
+                  </Link>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Additional Sections */}
-      <div className="grid md:grid-cols-3 gap-4">
-        {/* Listening Stats */}
-        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <Headphones className="w-6 h-6 text-blue-500" />
-              Listening Stats
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-neutral-400 text-sm">Total Plays</p>
-              <p className="text-2xl font-bold text-white">
-                {globalStats.totalPlays.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-neutral-400 text-sm">Unique Listeners</p>
-              <p className="text-2xl font-bold text-white">
-                {globalStats.uniqueListeners.toLocaleString()}
-              </p>
+              )}
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Top Genres */}
-        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <TrendingUp className="w-6 h-6 text-blue-500" />
-              Top Genres
-            </h2>
-          </div>
-          <div className="space-y-2">
-            {globalStats.topGenres.slice(0, 3).map((genre) => (
-              <div key={genre.name} className="flex justify-between">
-                <span className="text-neutral-400">{genre.name}</span>
-                <span className="text-white font-semibold">
-                  {genre.count.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Quick Actions Overview */}
+        <motion.div variants={itemVariants}>
+          <div className="bg-neutral-900/50 rounded-xl border border-neutral-800">
+            <div className="p-6 border-b border-neutral-800">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Clock className="w-6 h-6 text-blue-500" />
+                Quick Actions
+              </h2>
+            </div>
 
-        {/* Quick Links */}
-        <div className="bg-neutral-900/50 rounded-xl border border-neutral-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <Plus className="w-6 h-6 text-blue-500" />
-              Quick Links
-            </h2>
+            <div className="p-4 grid grid-cols-2 gap-4">
+              <Link
+                to="/search"
+                className="p-4 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors group"
+              >
+                <Upload className="w-8 h-8 text-blue-500 mb-3" />
+                <h3 className="font-medium text-white">Upload Music</h3>
+                <p className="text-sm text-neutral-400 mt-1">
+                  Share your tracks
+                </p>
+              </Link>
+
+              <Link
+                to="/profile"
+                className="p-4 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors group"
+              >
+                <User className="w-8 h-8 text-purple-500 mb-3" />
+                <h3 className="font-medium text-white">Profile</h3>
+                <p className="text-sm text-neutral-400 mt-1">
+                  View your activity
+                </p>
+              </Link>
+
+              <Link
+                to="/radio"
+                className="p-4 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors group"
+              >
+                <Radio className="w-8 h-8 text-green-500 mb-3" />
+                <h3 className="font-medium text-white">Live Radio</h3>
+                <p className="text-sm text-neutral-400 mt-1">Join the stream</p>
+              </Link>
+
+              <Link
+                to="/music-box"
+                className="p-4 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors group"
+              >
+                <Music2 className="w-8 h-8 text-red-500 mb-3" />
+                <h3 className="font-medium text-white">Suggestions</h3>
+                <p className="text-sm text-neutral-400 mt-1">Request songs</p>
+              </Link>
+            </div>
           </div>
-          <div className="space-y-2">
-            <a
-              href="/upload"
-              className="block text-neutral-400 hover:text-blue-500 transition-colors"
-            >
-              Upload Music
-            </a>
-            <a
-              href="/create-playlist"
-              className="block text-neutral-400 hover:text-blue-500 transition-colors"
-            >
-              Create Playlist
-            </a>
-            <a
-              href="/explore"
-              className="block text-neutral-400 hover:text-blue-500 transition-colors"
-            >
-              Explore New Music
-            </a>
-          </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+
+      {/* Error Display */}
+      {error && (
+        <motion.div
+          variants={itemVariants}
+          className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg"
+        >
+          {error}
+        </motion.div>
+      )}
+    </motion.div>
   );
 };
+
+export default HomePage;
